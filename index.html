@@ -23,6 +23,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0;
@@ -212,6 +213,10 @@ li.me { background: rgba(255, 201, 94, .07); border-radius: 10px; }
 .wick.soft { height: 3px; margin: 18px 0 14px; opacity: .7; }
 .wick.soft i::after { display: none; }
 .tip + .actions { margin-top: 18px; }
+.nickform input { }
+.nickform input { width: 16ch; font: 500 16px var(--body); letter-spacing: 0; text-transform: none; }
+#socialForms { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+#socialForms .codeform { margin: 0; padding: 0; border: 0; }
 .linkrow { display: inline-flex; gap: 16px; }
 .dlgsub { margin: 18px 0 6px; font: 400 20px var(--display); }
 
@@ -298,7 +303,7 @@ dialog .close { position: absolute; top: 14px; right: 14px; }
 
     <section class="play">
       <div class="card" id="panel"></div>
-      <div class="card social" id="socialCard" hidden></div>
+      <div class="card social" id="socialCard" hidden><div id="socialBody"></div></div>
       <div class="card social" id="boardCard" hidden></div>
       <div class="card tonight">
         <h3 id="tonightTitle">Tonight’s seven</h3>
@@ -320,7 +325,7 @@ dialog .close { position: absolute; top: 14px; right: 14px; }
     <li>Wrong answers cost nothing. Keep trying until the wick burns out, or pass.</li>
   </ol>
   <h3 class="dlgsub">Playing with friends</h3>
-  <p>Press <b>Play with friends</b> to open a party. Anyone you’ve shared this page with sees it under <b>Here now</b> and can join with one tap or the four-letter code. Everyone gets the same category at the same moment. When two players give the same answer, both get half the lumens. Finish the nightly hunt and your score lands on <b>Tonight’s board</b>.</p>
+  <p>Press <b>Play with friends</b> to open a party. Friends who have this page open see it under <b>Here now</b> and can join with one tap, the four-letter code or your invite link. Everyone gets the same category at the same moment. When two players give the same answer, both get half the lumens. Finish the nightly hunt and your score lands on <b>Tonight’s board</b>.</p>
   <table class="tiers" id="tierTable"></table>
   <p class="small">Answer lists are hand-built, so the odd valid answer may be missing. Small typos are forgiven.</p>
 </dialog>
@@ -578,6 +583,241 @@ if (typeof module !== 'undefined') module.exports = GJ;
 
 </script>
 <script>
+// Open-web multiplayer for self-hosted copies (GitHub Pages, itch.io...).
+// It offers the same room / user / db surface the Claude runtime gives the page,
+// carried over a free public MQTT relay, so the game code does not care which one it runs on.
+const GJOpen = (() => {
+  const NS = 'glowjar-aymansin/v1';
+  const LIB = 'https://cdn.jsdelivr.net/npm/mqtt@5.16.1/dist/mqtt.min.js';
+  const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'];
+  const KP = 'glowjar:v1:';
+  const HEARTBEAT = 25000, GONE = 70000, ZOMBIE = 10 * 60 * 1000;
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
+  };
+  const rand = n => { let s = ''; const a = 'abcdefghijkmnpqrstuvwxyz23456789'; for (let i = 0; i < n; i++) s += a[Math.floor(Math.random() * a.length)]; return s; };
+  const cleanNick = s => String(s || '').replace(/[\u0000-\u001f\u007f-\u009f­​-‏‪-‮⁠-⁯﻿]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+  const isObj = o => o && typeof o === 'object' && !Array.isArray(o);
+  const colorFor = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return `hsl(${h % 360} 70% 66%)`; };
+
+  function testBroker() {
+    try {
+      const b = new URLSearchParams(location.search).get('broker');
+      return b && /^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(b) ? b : null;
+    } catch (e) { return null; }
+  }
+  function loadLib() {
+    if (window.mqtt && window.mqtt.connect) return Promise.resolve(window.mqtt);
+    return new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = LIB; s.async = true;
+      s.onload = () => resolve(window.mqtt && window.mqtt.connect ? window.mqtt : null);
+      s.onerror = () => resolve(null);
+      document.head.appendChild(s);
+      setTimeout(() => resolve(window.mqtt && window.mqtt.connect ? window.mqtt : null), 12000);
+    });
+  }
+  function tryConnect(lib, url, willTopic) {
+    return new Promise(resolve => {
+      let done = false, c;
+      try {
+        c = lib.connect(url, { clientId: 'gj_' + rand(12), clean: true, keepalive: 30, reconnectPeriod: 3000, connectTimeout: 7000,
+          protocolVersion: 4, will: { topic: willTopic, payload: '', qos: 1, retain: true } });
+      } catch (e) { resolve(null); return; }
+      const t = setTimeout(() => { if (!done) { done = true; try { c.end(true); } catch (e) { /* closing */ } resolve(null); } }, 8000);
+      c.once('connect', () => { if (done) return; done = true; clearTimeout(t); resolve(c); });
+      c.on('error', () => { /* reconnects on its own */ });
+    });
+  }
+
+  async function connect() {
+    const lib = await loadLib();
+    if (!lib) return null;
+    let uid = store.get(KP + 'uid');
+    if (typeof uid !== 'string' || !/^u[a-z0-9]{10,20}$/.test(uid)) { uid = 'u' + rand(14); store.set(KP + 'uid', uid); }
+    let nick = cleanNick(store.get(KP + 'nick'));
+    const peer = rand(10);
+    const PEERS = `${NS}/peer/`, BOARD = `${NS}/board/`;
+    const myTopic = PEERS + peer;
+    const tb = testBroker();
+    let client = null;
+    for (const url of (tb ? [tb] : BROKERS)) { client = await tryConnect(lib, url, myTopic); if (client) break; }
+    if (!client) return null;
+
+    const peers = new Map();                     // peer label -> what they last told us
+    const me = { lobby: {}, room: null, rp: {} };
+    const nickMap = {};
+    let connected = true;
+    const lobbyL = new Set(), connL = new Set(), roomL = new Map(), boardL = new Map();
+    const boards = new Map();                    // day -> Map(uid -> row)
+    let lastBoard = null;
+
+    function payload() { return JSON.stringify({ v: 1, uid, nick, t: Date.now(), lobby: me.lobby, room: me.room, rp: me.room ? me.rp : null }); }
+    let pubTimer = 0;
+    function publishMe(now) {
+      clearTimeout(pubTimer);
+      const go = () => { try { client.publish(myTopic, payload(), { qos: 1, retain: true }); } catch (e) { /* reconnecting */ } };
+      if (now) go(); else pubTimer = setTimeout(go, 40);
+    }
+    function frozenPeer(r, presence, mine) {
+      return Object.freeze({ peer: r.peer, by: r.uid || null, presence: Object.freeze(Object.assign({}, presence, { uid: r.uid || null })),
+        isMe: !!mine, sameTab: !!mine, kind: 'viewer', guest: false, updatedAt: r.seen || Date.now() });
+    }
+    const self = () => ({ peer, uid, nick, seen: Date.now() });
+    function lobbyPeers() { return [...[...peers.values()].map(r => frozenPeer(r, r.lobby)), frozenPeer(self(), me.lobby, true)]; }
+    function roomPeers(name) {
+      const out = [...peers.values()].filter(r => r.room === name).map(r => frozenPeer(r, r.rp));
+      if (me.room === name) out.push(frozenPeer(self(), me.rp, true));
+      return out;
+    }
+    let notifyQueued = false;
+    function changed() {
+      if (notifyQueued) return;
+      notifyQueued = true;
+      setTimeout(() => {
+        notifyQueued = false;
+        const lp = lobbyPeers();
+        lobbyL.forEach(fn => { try { fn({ peers: lp, joined: [], left: [], updated: [] }); } catch (e) { console.error(e); } });
+        roomL.forEach((set, name) => { const rp = roomPeers(name); set.forEach(fn => { try { fn({ peers: rp, joined: [], left: [], updated: [] }); } catch (e) { console.error(e); } }); });
+      }, 0);
+    }
+    function merge(target, patch) {
+      for (const [k, v] of Object.entries(patch || {})) { if (v === null) delete target[k]; else target[k] = JSON.parse(JSON.stringify(v)); }
+    }
+    function deliverBoard(day) {
+      const set = boardL.get(day); if (!set) return;
+      const rows = [...(boards.get(day) || new Map()).values()].sort((a, b) => b.lumens - a.lumens);
+      set.forEach(({ next, limit }) => {
+        const docs = rows.slice(0, limit).map(r => ({ id: r.uid, exists: true, data: () => r, metadata: { fromCache: false, hasPendingWrites: false } }));
+        try { next({ docs, size: docs.length, empty: !docs.length, docChanges: () => [], metadata: { fromCache: false, hasPendingWrites: false } }); } catch (e) { console.error(e); }
+      });
+    }
+
+    client.on('message', (topic, buf) => {
+      if (!buf || buf.length > 16000) return;
+      if (topic.startsWith(PEERS)) {
+        const id = topic.slice(PEERS.length);
+        if (id === peer || !/^[a-z0-9]{4,20}$/.test(id)) return;
+        if (!buf.length) { if (peers.delete(id)) changed(); return; }
+        let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; }
+        if (!isObj(m)) return;
+        const t = Number(m.t) || 0;
+        if (Date.now() - t > ZOMBIE) { if (peers.delete(id)) changed(); return; }
+        const rec = { peer: id, uid: typeof m.uid === 'string' ? m.uid.slice(0, 40) : null, nick: cleanNick(m.nick), seen: Date.now(),
+          lobby: isObj(m.lobby) ? m.lobby : {}, room: typeof m.room === 'string' ? m.room.slice(0, 48) : null, rp: isObj(m.rp) ? m.rp : {} };
+        if (rec.uid && rec.nick) nickMap[rec.uid] = rec.nick;
+        peers.set(id, rec);
+        changed();
+      } else if (topic.startsWith(BOARD)) {
+        const [dayS, who] = topic.slice(BOARD.length).split('/');
+        const day = Number(dayS);
+        if (!boardL.has(day) || !who || !/^u[a-z0-9]{10,20}$/.test(who)) return;
+        const rows = boards.get(day) || new Map(); boards.set(day, rows);
+        if (!buf.length) rows.delete(who);
+        else {
+          let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; }
+          if (!isObj(m) || Number(m.day) !== day) return;
+          const n = cleanNick(m.nick);
+          if (n) nickMap[who] = n;
+          rows.set(who, { uid: who, day, lumens: Math.max(0, Math.min(99999, Math.round(Number(m.lumens) || 0))), seals: Math.max(0, Math.min(9, Number(m.seals) || 0)),
+            moons: String(m.moons || '').slice(0, 40), nick: n, at: Number(m.at) || 0 });
+        }
+        deliverBoard(day);
+      }
+    });
+    client.on('connect', () => { connected = true; connL.forEach(f => f(true)); publishMe(true); });
+    client.on('close', () => { if (connected) { connected = false; connL.forEach(f => f(false)); } });
+    client.subscribe(PEERS + '+', { qos: 1 });
+    publishMe(true);
+    setInterval(() => publishMe(true), HEARTBEAT);
+    setInterval(() => {
+      const now = Date.now(); let gone = false;
+      for (const [id, r] of peers) if (now - r.seen > GONE) { peers.delete(id); gone = true; }
+      if (gone) changed();
+    }, 10000);
+    const bye = () => { try { client.publish(myTopic, '', { qos: 0, retain: true }); client.end(false); } catch (e) { /* closing */ } };
+    window.addEventListener('pagehide', bye);
+
+    function onConnection(fn) { connL.add(fn); setTimeout(() => fn(connected), 0); return () => connL.delete(fn); }
+    function namedRoom(name) {
+      const set = roomL.get(name) || new Set(); roomL.set(name, set);
+      return {
+        name,
+        presence(patch) { if (me.room !== name) return Promise.reject({ code: 'invalid_argument', message: 'not in this room' }); merge(me.rp, patch); publishMe(); changed(); return Promise.resolve(); },
+        peers: () => roomPeers(name),
+        onPeers(fn) { set.add(fn); setTimeout(() => fn({ peers: roomPeers(name), joined: [], left: [], updated: [] }), 0); return () => set.delete(fn); },
+        emit: () => Promise.resolve(), on: () => () => {},
+        connected: () => connected, onConnection,
+        leave() { if (me.room === name) { me.room = null; me.rp = {}; publishMe(); } roomL.delete(name); changed(); return Promise.resolve(); },
+      };
+    }
+    const room = {
+      presence(patch) { merge(me.lobby, patch); publishMe(); changed(); return Promise.resolve(); },
+      peers: lobbyPeers,
+      onPeers(fn) { lobbyL.add(fn); setTimeout(() => fn({ peers: lobbyPeers(), joined: [], left: [], updated: [] }), 0); return () => lobbyL.delete(fn); },
+      emit: () => Promise.resolve(), on: () => () => {},
+      connected: () => connected, onConnection,
+      join(name) {
+        if (!/^[a-z0-9][a-z0-9_.-]{0,47}$/.test(String(name))) return Promise.reject({ code: 'invalid_argument', message: 'bad room name' });
+        me.room = name; me.rp = {};
+        publishMe(); changed();
+        return Promise.resolve(namedRoom(name));
+      },
+    };
+    const user = {
+      id: async () => uid,
+      me: async () => ({ id: uid, name: nick, avatarUrl: '', color: colorFor(uid), email: null, isOwner: false, canEdit: false }),
+      isOwner: async () => false, canEdit: async () => false, can: async () => null,
+      profiles: async ids => Object.fromEntries([].concat(ids || []).map(i => [i, { id: i, name: i === uid ? nick : (nickMap[i] || ''), avatarUrl: '', color: colorFor(i), email: null, isMe: i === uid, guest: false }])),
+    };
+    function query(col, day, limit) {
+      return {
+        where(f, op, v) { return query(col, f === 'day' && op === '==' ? Number(v) : day, limit); },
+        orderBy() { return query(col, day, limit); },
+        limit(n) { return query(col, day, n); },
+        onSnapshot(next) {
+          if (!day) return () => {};
+          const set = boardL.get(day) || new Set(); boardL.set(day, set);
+          const entry = { next, limit: limit || 30 };
+          set.add(entry);
+          client.subscribe(`${BOARD}${day}/+`, { qos: 1 }, () => setTimeout(() => deliverBoard(day), 400));
+          return () => set.delete(entry);
+        },
+      };
+    }
+    const db = {
+      collection: col => query(col, 0, 30),
+      doc(path) {
+        return {
+          async set(data) {
+            if (!isObj(data) || !Number(data.day)) throw { code: 'invalid_argument', message: 'bad score' };
+            lastBoard = Object.assign({}, data);
+            await new Promise((res, rej) => client.publish(`${BOARD}${Number(data.day)}/${uid}`, JSON.stringify(Object.assign({}, data, { nick })), { qos: 1, retain: true }, e => (e ? rej({ code: 'unavailable' }) : res())));
+          },
+        };
+      },
+    };
+    return {
+      open: true,
+      use: async name => (name === 'room' ? room : name === 'user' ? user : name === 'db' ? db : null),
+      getNick: () => nick,
+      setNick(n) {
+        nick = cleanNick(n);
+        store.set(KP + 'nick', nick);
+        if (nick) nickMap[uid] = nick;
+        publishMe();
+        if (lastBoard) client.publish(`${BOARD}${Number(lastBoard.day)}/${uid}`, JSON.stringify(Object.assign({}, lastBoard, { nick })), { qos: 1, retain: true });
+        changed();
+        return nick;
+      },
+    };
+  }
+  return { connect };
+})();
+
+</script>
+<script>
 (() => {
   'use strict';
   const $ = (s, el = document) => el.querySelector(s);
@@ -596,14 +836,14 @@ if (typeof module !== 'undefined') module.exports = GJ;
   };
 
   const panel = $('#panel'), strip = $('#strip'), tonight = $('#tonight'), jarSlot = $('#jarSlot'), floats = $('#floats');
-  const social = $('#socialCard'), boardCard = $('#boardCard');
+  const social = $('#socialCard'), socialBody = $('#socialBody'), boardCard = $('#boardCard');
   let prefs = Object.assign({ sound: true }, store.get(KEY + ':prefs', {}));
   let S = null;              // game state (plain JSON)
   let deadline = 0, tickRaf = 0, countdownIv = 0, lastNextAt = 0;
   let stripOverride = null;  // letters to show while a sealed jar is still on screen
 
   // Shared-world handles. Everything here is optional: the game runs without it.
-  const NET = { room: null, user: null, db: null, uid: null, connected: false, lobbyPeers: [], lastLobby: '', names: {},
+  const NET = { room: null, user: null, db: null, uid: null, open: null, connected: false, lobbyPeers: [], lastLobby: '', names: {},
     board: [], boardState: 'off', postError: null, codeError: '' };
   let P = null;              // the party this page is in, if any
 
@@ -898,6 +1138,7 @@ if (typeof module !== 'undefined') module.exports = GJ;
 
   function onInput(e) {
     if (e.target.id === 'codeIn') { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); return; }
+    if (e.target.id === 'nickIn') return;
     if (e.target.id !== 'answer') return;
     const key = GJ.keyOf(e.target.value);
     const L = GJ.lettersOf(key);
@@ -915,6 +1156,16 @@ if (typeof module !== 'undefined') module.exports = GJ;
   function onSubmit(e) {
     e.preventDefault();
     if (e.target.id === 'codeForm') { joinParty($('#codeIn').value); return; }
+    if (e.target.id === 'nickForm') {
+      if (!NET.open) return;
+      const n = NET.open.setNick($('#nickIn').value);
+      $('#nickIn').value = n;
+      $('#nickNote').textContent = n ? 'Saved' : '';
+      setTimeout(() => { const el = $('#nickNote'); if (el) el.textContent = ''; }, 1600);
+      if (NET.uid) NET.names[NET.uid] = { name: n, color: '', avatarUrl: '' };
+      renderSocial(); renderPartyLive(); renderBoard();
+      return;
+    }
     const party = S.mode === 'party';
     if (party ? S.phase !== 'pplay' : S.phase !== 'play') return;
     const inp = $('#answer');
@@ -1063,11 +1314,38 @@ if (typeof module !== 'undefined') module.exports = GJ;
     return `round ${pt.round} of 7`;
   }
 
+  function ensureSocialForms() {
+    let f = $('#socialForms');
+    if (!f) {
+      f = document.createElement('div');
+      f.id = 'socialForms';
+      f.innerHTML = `
+        <form id="nickForm" class="codeform nickform" autocomplete="off" hidden>
+          <label for="nickIn" class="small">Your name</label>
+          <input id="nickIn" maxlength="20" placeholder="So friends know it’s you" spellcheck="false">
+          <button class="btn mini" type="submit">Save</button>
+          <span class="small" id="nickNote"></span>
+        </form>
+        <form id="codeForm" class="codeform" autocomplete="off">
+          <label for="codeIn" class="small">Got a party code?</label>
+          <input id="codeIn" maxlength="4" placeholder="ABCD" autocapitalize="characters" spellcheck="false" aria-describedby="codeErr">
+          <button class="btn mini" type="submit">Join</button>
+          <span class="small bad" id="codeErr"></span>
+        </form>`;
+      social.appendChild(f);
+    }
+    const nf = $('#nickForm');
+    if (NET.open && nf.hidden) { nf.hidden = false; $('#nickIn').value = NET.open.getNick(); }
+  }
   function renderSocial() {
     if (!social) return;
-    if (S && S.mode === 'party' && P) { social.hidden = false; social.innerHTML = playersHTML(); return; }
-    if (!NET.room) { social.hidden = true; return; }
+    const inParty = S && S.mode === 'party' && P;
+    if (!inParty && !NET.room) { social.hidden = true; return; }
     social.hidden = false;
+    ensureSocialForms();
+    $('#codeForm').hidden = !!inParty;
+    $('#codeErr').textContent = NET.codeError;
+    if (inParty) { socialBody.innerHTML = playersHTML(); return; }
     const peers = NET.lobbyPeers.filter(p => p.kind !== 'agent');
     const others = peers.filter(p => !p.sameTab);
     const parties = [];
@@ -1082,17 +1360,14 @@ if (typeof module !== 'undefined') module.exports = GJ;
     }).join('');
     const partyRows = parties.map(({ p, pt }) => `
       <li><span class="pcode">${esc(pt.code)}</span><span class="who">${esc(p.sameTab ? 'Your' : personName(idOf(p), p.peer) + '’s')} party</span><span class="what">${pt.n} ${pt.n === 1 ? 'player' : 'players'} · ${esc(partyPhaseText(pt))}</span>${p.sameTab ? '' : `<button class="btn mini" type="button" data-join="${esc(pt.code)}">Join</button>`}</li>`).join('');
-    social.innerHTML = `
+    const alone = NET.open
+      ? 'Only you right now. Send friends the link to this page; anyone with it open shows up here.'
+      : 'Only you right now. Anyone you share this page with shows up here while they have it open.';
+    socialBody.innerHTML = `
       <h3>Here now <span class="count">${peers.length || 1}</span></h3>
       ${NET.connected || peers.length ? `<ul class="people">${rows}</ul>` : '<p class="small">Connecting…</p>'}
-      ${others.length ? '' : '<p class="small">Only you right now. Anyone you share this page with shows up here while they have it open.</p>'}
-      ${parties.length ? `<h4>Open parties</h4><ul class="parties">${partyRows}</ul>` : ''}
-      <form id="codeForm" class="codeform" autocomplete="off">
-        <label for="codeIn" class="small">Got a party code?</label>
-        <input id="codeIn" maxlength="4" placeholder="ABCD" autocapitalize="characters" spellcheck="false" aria-describedby="codeErr">
-        <button class="btn mini" type="submit">Join</button>
-        <span class="small bad" id="codeErr">${esc(NET.codeError)}</span>
-      </form>`;
+      ${others.length ? '' : `<p class="small">${alone}</p>`}
+      ${parties.length ? `<h4>Open parties</h4><ul class="parties">${partyRows}</ul>` : ''}`;
   }
 
   /* ================= multiplayer: tonight’s board ================= */
@@ -1115,7 +1390,8 @@ if (typeof module !== 'undefined') module.exports = GJ;
       <li class="${r.id === NET.uid ? 'me' : ''}"><span class="rk">${k + 1}</span>${avatar(r.id, r.id)}<span class="who">${esc(personName(r.id))}</span><span class="mo" aria-label="Moon phases per category">${esc(r.moons)}</span><b>${r.lumens}</b></li>`).join('')}</ol>`;
     let note = '';
     const finished = S && S.mode === 'daily' && S.phase === 'end';
-    if (NET.postError) note = '<p class="small">You can see the board, but your access to this page can’t add a score. Ask the owner to make you a Contributor.</p>';
+    if (NET.postError) note = NET.open ? '<p class="small">Your score couldn’t be posted just now. It will try again next visit.</p>'
+      : '<p class="small">You can see the board, but your access to this page can’t add a score. Ask the owner to make you a Contributor.</p>';
     else if (!NET.uid) note = '<p class="small">Scores post when you’re signed in to Claude.</p>';
     else if (!finished && !(rows.some(r => r.id === NET.uid))) note = '<p class="small">Finish tonight’s hunt and your score lands here.</p>';
     boardCard.innerHTML = `<h3>Tonight’s board <span class="count">Night #${day}</span></h3>${body}${note}`;
@@ -1452,12 +1728,20 @@ if (typeof module !== 'undefined') module.exports = GJ;
     return `
       <p class="eyebrow">Party · <span id="hereCount">${partyPeers().length || 1}</span> here</p>
       <h1 class="hero party">Party ${codeChips(S.code)}</h1>
-      <p class="lede">${isHost ? 'Friends with this page open will see your party under <b>Here now</b> and can join with one tap, or by typing the code.' : `You’re in. Waiting for <span id="hostName">${esc(hostName())}</span> to start.`}</p>
+      <p class="lede">${isHost ? (NET.open ? 'Send friends the invite link and they land straight in this party. Anyone with the page open also sees it under <b>Here now</b>.' : 'Friends with this page open will see your party under <b>Here now</b> and can join with one tap, or by typing the code.') : `You’re in. Waiting for <span id="hostName">${esc(hostName())}</span> to start.`}</p>
       <p class="tip">Seven rounds, everyone on the same category at once, 30 seconds each. When two players give the same answer, both get half the lumens, so go for the one nobody else will think of.</p>
       <div class="actions">
         ${isHost ? '<button class="btn primary" id="btnPStart" type="button">Start the game</button>' : ''}
+        ${NET.open ? '<button class="btn ghost" id="btnInvite" type="button">Copy invite link</button>' : ''}
         <button class="btn ghost" id="btnPLeave" type="button">Leave party</button>
-      </div>`;
+      </div>
+      <textarea id="inviteBox" class="sharebox" readonly hidden aria-label="Invite link to copy"></textarea>`;
+  }
+  function inviteLink() { return `${location.origin}${location.pathname}#party-${S.code.toLowerCase()}`; }
+  async function copyInvite() {
+    const link = inviteLink(), btn = $('#btnInvite'), box = $('#inviteBox');
+    try { await navigator.clipboard.writeText(link); btn.textContent = 'Link copied'; setTimeout(() => { if (btn.isConnected) btn.textContent = 'Copy invite link'; }, 1800); }
+    catch (e) { box.hidden = false; box.value = link; box.focus(); box.select(); }
   }
   function pReadyHTML() {
     return `
@@ -1541,7 +1825,7 @@ if (typeof module !== 'undefined') module.exports = GJ;
 
   function renderPartyLive() {
     if (!S || S.mode !== 'party' || !P) return;
-    if (social) social.innerHTML = playersHTML();
+    if (socialBody && !social.hidden) socialBody.innerHTML = playersHTML();
     const peers = partyPeers();
     const g = P.game;
     const line = $('#answeredLine');
@@ -1612,6 +1896,7 @@ if (typeof module !== 'undefined') module.exports = GJ;
       case 'btnPNext': hostAdvance(); break;
       case 'btnPAgain': hostStart(); break;
       case 'btnPLeave': leaveParty(false); break;
+      case 'btnInvite': copyInvite(); break;
     }
   });
   document.addEventListener('submit', onSubmit);
@@ -1917,8 +2202,20 @@ if (typeof module !== 'undefined') module.exports = GJ;
       })();
     });
   }
+  function inviteFromHash() {
+    const m = /^#party-([a-z]{4})$/i.exec(location.hash || '');
+    return m ? m[1].toUpperCase() : null;
+  }
   async function initNet() {
-    const c = await waitForClaude(4000);
+    let topLevel = false;
+    try { topLevel = window.top === window; } catch (e) { topLevel = false; }
+    let c = window.claude && typeof window.claude.use === 'function' ? window.claude : topLevel ? null : await waitForClaude(4000);
+    if (!c && typeof GJOpen !== 'undefined') {
+      NET.connecting = true; renderSocial();
+      try { c = await GJOpen.connect(); } catch (e) { c = null; }
+      NET.connecting = false;
+      if (c) NET.open = c;
+    }
     if (!c) return;
     const safe = name => Promise.resolve().then(() => c.use(name)).catch(() => null);
     const userP = safe('user');
@@ -1940,6 +2237,11 @@ if (typeof module !== 'undefined') module.exports = GJ;
       }, () => { NET.room = null; NET.lobbyPeers = []; renderSocial(); });
       NET.lastLobby = '';
       if (['intro', 'end'].includes(S.phase)) render(); else { renderSocial(); updateLobby(); }
+      const code = inviteFromHash();
+      if (code && !P && !['play', 'reveal'].includes(S.phase)) {
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* sandboxed */ }
+        joinParty(code);
+      }
     });
     dbP.then(db => { if (db) initDb(db); });
   }

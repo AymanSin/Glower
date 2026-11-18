@@ -4,4 +4,6 @@ A nightly word hunt in a jar of fireflies. Seven categories, thirty seconds each
 
 **Play:** https://aymansin.github.io/Glower/
 
-The whole game is one file, `index.html`, with no build step or server. Stats and streaks are saved in the player's browser.
+**Play with friends:** press *Play with friends*, then *Copy invite link* and send it. Friends land straight in your party, no account needed. Everyone gets the same category at once, and matching answers score half.
+
+The whole game is one file, `index.html`, with no build step. Multiplayer runs over a free public MQTT relay (EMQX, with HiveMQ as backup), so don't put anything private in your player name. Stats and streaks are saved in each player's browser.
