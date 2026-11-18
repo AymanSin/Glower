@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glowjar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Rethink+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Layout: the jar sits on the left like a lantern on a sill, the hunt runs on the right; phones stack jar above. */
+  --night: #08121a;
+  --dusk: #0f2230;
+  --card: rgba(12, 26, 36, 0.9);
+  --ink: #efe8d3;
+  --muted: #93a8ab;
+  --honey: #ffc95e;
+  --line: rgba(239, 232, 211, 0.13);
+  --miss: #ff8a7a;
+  --display: 'Caprasimo', 'Cooper Black', Georgia, serif;
+  --body: 'Rethink Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: radial-gradient(130% 90% at 72% -20%, #1b3a48 0%, #0d1f2b 38%, var(--night) 72%) fixed, var(--night);
+  color: var(--ink);
+  font: 400 16px/1.5 var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+canvas#sky, canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+canvas#sky { z-index: 0; }
+canvas#fx { z-index: 5; }
+.app { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 18px clamp(16px, 3vw, 32px) 110px; display: grid; gap: clamp(16px, 2.4vw, 28px); }
+
+/* header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; min-width: 0; }
+.wordmark { font: 400 30px/1 var(--display); letter-spacing: 0.005em; }
+.wordmark i { font-style: normal; color: var(--honey); text-shadow: 0 0 14px rgba(255, 201, 94, 0.75); }
+.night { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.tools { display: flex; gap: 8px; }
+.icon { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: rgba(8, 18, 26, 0.6); color: var(--ink); display: grid; place-items: center; cursor: pointer; font: 600 17px var(--body); }
+.icon:hover { border-color: rgba(255, 201, 94, 0.5); }
+.icon svg { width: 18px; height: 18px; }
+.icon[aria-pressed="false"] { color: var(--muted); }
+
+/* layout */
+.layout { display: grid; grid-template-columns: minmax(300px, 0.92fr) 1.08fr; gap: clamp(20px, 3.4vw, 44px); align-items: start; }
+.jarcol { position: sticky; top: 18px; display: grid; gap: 14px; }
+.jarSlot { position: relative; height: clamp(320px, 58vh, 520px); }
+.jarMeta { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.jarMeta b { color: var(--ink); font-weight: 600; }
+.floats { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.float { position: absolute; left: 50%; top: 30%; transform: translate(-50%, 0); white-space: nowrap; font: 400 30px/1 var(--display); color: var(--honey); text-shadow: 0 0 22px rgba(255, 201, 94, 0.85); animation: rise 1.8s cubic-bezier(.2, .7, .2, 1) forwards; }
+.float.seal { top: 18%; font-size: 26px; color: #fff4d6; }
+@keyframes rise { 0% { opacity: 0; transform: translate(-50%, 18px) scale(.9); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -46px); } }
+
+/* alphabet strip */
+.strip { display: grid; grid-template-columns: repeat(13, 1fr); gap: 5px; }
+.tile { --c: #fff; position: relative; aspect-ratio: 1 / 1.14; border-radius: 9px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--c) 32%, transparent); color: color-mix(in srgb, var(--c) 58%, transparent); background: rgba(8, 18, 26, 0.55); transition: background .35s, color .35s, box-shadow .35s, border-color .35s; }
+.tile b { font: 400 17px/1 var(--display); }
+.tile small { position: absolute; right: 3px; bottom: 1px; font: 600 9px/1.2 var(--body); opacity: .75; font-variant-numeric: tabular-nums; }
+.tile.caught { background: radial-gradient(circle at 50% 46%, var(--c) 0 40%, color-mix(in srgb, var(--c) 45%, transparent) 78%); color: #22170a; border-color: var(--c); box-shadow: 0 0 16px -3px var(--c); }
+.tile.hint:not(.caught) { border-style: dashed; border-color: var(--c); color: var(--c); animation: twinkle 1.1s ease-in-out infinite; }
+@keyframes twinkle { 50% { box-shadow: 0 0 14px -4px var(--c); } }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--muted); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+.legend b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* cards */
+.play { display: grid; gap: 16px; min-width: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: clamp(18px, 2.6vw, 30px); min-width: 0; }
+.eyebrow { margin: 0; color: var(--muted); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.hero { margin: 10px 0 14px; font: 400 clamp(36px, 5vw, 58px)/1.02 var(--display); letter-spacing: -0.005em; text-wrap: balance; }
+.hero em { font-style: normal; color: var(--honey); text-shadow: 0 0 26px rgba(255, 201, 94, .6); }
+.lede { margin: 0 0 18px; color: #cdd6d0; max-width: 58ch; font-size: 16.5px; }
+.lede b { color: var(--honey); font-weight: 700; }
+.tip { margin: 16px 0 0; color: var(--muted); font-size: 14px; max-width: 58ch; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { font: 600 16px/1 var(--body); padding: 14px 22px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; transition: transform .12s, box-shadow .2s, background .2s; }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--honey); color: #21170a; box-shadow: 0 8px 28px -10px rgba(255, 201, 94, .75); }
+.btn.primary:hover { background: #ffd47a; box-shadow: 0 8px 32px -8px rgba(255, 201, 94, .9); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: rgba(255, 201, 94, .5); }
+.link { background: none; border: 0; padding: 4px 0; color: var(--muted); font: 500 14px var(--body); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.link:hover { color: var(--ink); }
+:focus-visible { outline: 2px solid var(--honey); outline-offset: 3px; }
+
+/* play */
+.meta { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.score { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.score b { color: var(--honey); font: 400 20px var(--display); margin-right: 4px; }
+.prompt { margin: 10px 0 16px; font: 400 clamp(28px, 3.6vw, 42px)/1.08 var(--display); text-wrap: balance; }
+.prompt.dim { color: var(--muted); }
+.wick { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .07); overflow: visible; margin-bottom: 18px; position: relative; }
+.wick i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff9440, var(--honey)); box-shadow: 0 0 14px rgba(255, 201, 94, .55); }
+.wick i::after { content: ''; position: absolute; right: -3px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: #fff6dc; box-shadow: 0 0 12px 3px rgba(255, 201, 94, .9); }
+.wick.low i { background: linear-gradient(90deg, #ff6b5e, #ff9440); }
+.answer { display: flex; gap: 10px; }
+.answer input { flex: 1; min-width: 0; height: 54px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--line); background: rgba(0, 0, 0, .3); color: var(--ink); font: 500 20px var(--body); letter-spacing: .01em; }
+.answer input::placeholder { color: rgba(147, 168, 171, .7); }
+.answer input:focus { outline: none; border-color: rgba(255, 201, 94, .7); box-shadow: 0 0 0 4px rgba(255, 201, 94, .12); }
+.answer .btn { height: 54px; }
+.shake { animation: shake .38s; }
+@keyframes shake { 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(2px); } }
+.preview { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 34px; margin-top: 12px; }
+.chip { --c: #fff; display: inline-grid; place-items: center; min-width: 26px; height: 28px; padding: 0 5px; border-radius: 8px; background: var(--c); color: #21170a; font: 400 15px/1 var(--display); box-shadow: 0 0 12px -3px var(--c); }
+.chip.old { background: transparent; color: rgba(147, 168, 171, .55); box-shadow: none; border: 1px dashed rgba(147, 168, 171, .3); }
+.gain { margin-left: 6px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.gain b { color: var(--honey); }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 6px; }
+.feedback { margin: 0; min-height: 24px; color: var(--muted); font-size: 15px; }
+.feedback.bad { color: var(--miss); }
+.secs { font: 400 22px var(--display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.secs.low { color: var(--miss); }
+
+/* reveal */
+.best { margin: 18px 0 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.best ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; }
+.best li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name lm" "chips chips"; align-items: baseline; gap: 4px 12px; padding: 8px 0; border-top: 1px dashed var(--line); }
+.best li:first-child { border-top: 0; }
+.best li > span:first-child { grid-area: name; font-weight: 600; overflow-wrap: anywhere; }
+.best .chips { grid-area: chips; display: flex; flex-wrap: wrap; gap: 3px; }
+.best li > b { grid-area: lm; }
+.best .chips .chip { min-width: 20px; height: 22px; font-size: 12px; border-radius: 6px; }
+.best li > b { color: var(--honey); font-variant-numeric: tabular-nums; }
+.inline-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: middle; margin: 0 2px; }
+.inline-chips .chip { min-width: 22px; height: 24px; font-size: 13px; }
+
+/* end */
+.total { display: flex; align-items: baseline; gap: 12px; margin: 8px 0 2px; }
+.total .big { font: 400 clamp(64px, 9vw, 96px)/1 var(--display); color: var(--honey); text-shadow: 0 0 34px rgba(255, 201, 94, .55); font-variant-numeric: tabular-nums; }
+.total span:last-child { font: 400 24px var(--display); color: var(--ink); }
+.rank { margin: 0 0 6px; font: 600 18px var(--body); }
+.moons { margin: 6px 0 16px; font-size: 30px; letter-spacing: 6px; line-height: 1.2; }
+.sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
+.sum div { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.sum dt { color: var(--muted); font-size: 12.5px; }
+.sum dd { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sharebox { width: 100%; margin-top: 12px; min-height: 92px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0, 0, 0, .3); color: var(--ink); font: 14px/1.5 var(--body); padding: 10px; }
+.next { margin: 16px 0 0; color: var(--muted); font-size: 14px; }
+.next b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* tonight list */
+.tonight h3 { margin: 0 0 6px; font: 400 20px var(--display); }
+.tonight ol { list-style: none; margin: 0; padding: 0; }
+.tonight li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 8px; border-top: 1px solid var(--line); border-radius: 0; }
+.tonight li:first-child { border-top: 0; }
+.tonight .n { font: 400 15px var(--display); color: var(--muted); }
+.tonight .cat { font-weight: 500; }
+.tonight .res { display: flex; gap: 10px; align-items: baseline; justify-content: flex-end; min-width: 0; }
+.tonight .ans { color: var(--muted); font-size: 14px; max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tonight .ans.miss { font-style: italic; }
+.tonight .lm { color: var(--honey); font-variant-numeric: tabular-nums; font-weight: 600; min-width: 3ch; text-align: right; }
+.tonight li.cur { background: rgba(255, 201, 94, .08); border-radius: 10px; }
+.tonight li.cur .n, .tonight li.cur .cat { color: var(--honey); }
+.tonight li.todo .cat { color: #c9d2cd; }
+
+/* social cards: here now, party players, tonight's board */
+.social h3 { margin: 0 0 8px; font: 400 20px var(--display); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.social h4 { margin: 14px 0 6px; font: 600 13.5px var(--body); color: var(--muted); letter-spacing: .02em; }
+.count { font: 600 12.5px var(--body); color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 2px 9px; font-variant-numeric: tabular-nums; }
+.people, .parties, .players, .board, .answers, .standings { list-style: none; margin: 0; padding: 0; }
+.people li, .parties li, .players li, .board li, .answers li, .standings li { display: grid; align-items: center; gap: 10px; padding: 8px 6px; border-top: 1px solid var(--line); min-width: 0; }
+.people li:first-child, .parties li:first-child, .players li:first-child, .board li:first-child, .answers li:first-child, .standings li:first-child { border-top: 0; }
+.people li { grid-template-columns: 24px minmax(0, auto) 1fr; }
+.parties li { grid-template-columns: auto minmax(0, auto) 1fr auto; }
+.players li { grid-template-columns: 24px minmax(0, 1fr) auto auto 3.5ch; }
+.board li, .standings li { grid-template-columns: 2ch 24px minmax(0, 1fr) auto 4ch; }
+.answers li { grid-template-columns: 24px minmax(0, 1fr) auto 4ch; grid-template-areas: "av who chips lm" "av said said said"; row-gap: 2px; }
+.answers .av { grid-area: av; align-self: start; margin-top: 2px; }
+.answers .who { grid-area: who; }
+.answers .said { grid-area: said; color: #cdd6d0; font-size: 15px; overflow-wrap: anywhere; }
+.answers .said i { color: var(--muted); }
+.answers .chips { grid-area: chips; display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end; }
+.answers .chips .chip { min-width: 20px; height: 22px; font-size: 12px; border-radius: 6px; }
+.answers li > b { grid-area: lm; }
+.who { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.what { color: var(--muted); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.people .what { text-align: right; }
+.players li > b, .board li > b, .standings li > b, .answers li > b { color: var(--honey); font-variant-numeric: tabular-nums; text-align: right; }
+.jarn { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.rk { font: 400 15px var(--display); color: var(--muted); text-align: center; }
+.standings li:first-child .rk { color: var(--honey); }
+.mo { font-size: 14px; letter-spacing: 1px; white-space: nowrap; }
+li.me { background: rgba(255, 201, 94, .07); border-radius: 10px; }
+.av { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: block; }
+.av.dot { background: radial-gradient(circle at 50% 45%, var(--c) 0 45%, color-mix(in srgb, var(--c) 30%, transparent) 75%); box-shadow: 0 0 10px -2px var(--c); }
+.crown { font-style: normal; color: var(--honey); }
+.tag { display: inline-block; font: 600 11.5px var(--body); color: #21170a; background: #ff9440; border-radius: 99px; padding: 1px 7px; vertical-align: 1px; }
+.tag.seal { background: #a6e6ff; }
+.pcode { font: 400 15px var(--display); color: var(--honey); letter-spacing: .1em; }
+.btn.mini { padding: 8px 14px; font-size: 14px; background: transparent; color: var(--ink); border-color: rgba(255, 201, 94, .5); }
+.btn.mini:hover { background: rgba(255, 201, 94, .12); }
+.codeform { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.codeform input { width: 9.5ch; height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, .3); color: var(--ink); font: 400 18px var(--display); letter-spacing: .14em; text-transform: uppercase; }
+.codeform input:focus { outline: none; border-color: rgba(255, 201, 94, .7); }
+.small.bad { color: var(--miss); }
+.small.bad:empty { display: none; }
+.codechips { display: inline-flex; gap: 4px; vertical-align: middle; }
+.hero.party .codechips .chip { min-width: 0.95em; height: 1.05em; font-size: 0.8em; border-radius: 10px; padding: 0 .12em; }
+.social h3 .codechips .chip { min-width: 22px; height: 24px; font-size: 14px; }
+.lm.pending { color: var(--muted); }
+.half { font-style: normal; font-size: 11px; margin-left: 3px; color: #ff9440; }
+.wick.soft { height: 3px; margin: 18px 0 14px; opacity: .7; }
+.wick.soft i::after { display: none; }
+.tip + .actions { margin-top: 18px; }
+.linkrow { display: inline-flex; gap: 16px; }
+.dlgsub { margin: 18px 0 6px; font: 400 20px var(--display); }
+
+/* dialogs */
+dialog { width: min(540px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; background: var(--dusk); color: var(--ink); border: 1px solid var(--line); border-radius: 22px; padding: 26px; }
+dialog::backdrop { background: rgba(3, 8, 12, .72); }
+dialog h2 { margin: 0 0 12px; font: 400 30px/1.1 var(--display); }
+dialog p, dialog li { color: #cdd6d0; }
+dialog ol { padding-left: 20px; display: grid; gap: 8px; margin: 0 0 16px; }
+dialog .close { position: absolute; top: 14px; right: 14px; }
+.tiers { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-variant-numeric: tabular-nums; }
+.tiers td { padding: 6px 4px; border-top: 1px solid var(--line); }
+.tiers td:first-child { white-space: nowrap; }
+.tiers td:last-child { text-align: right; color: var(--honey); font-weight: 600; }
+.tiers i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); margin-right: 8px; }
+.tiers .letters { font-family: var(--display); letter-spacing: .12em; color: var(--ink); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 8px 0 4px; }
+.stats div { border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.stats b { display: block; font: 400 30px/1.1 var(--display); color: var(--honey); font-variant-numeric: tabular-nums; }
+.stats span { color: var(--muted); font-size: 13px; }
+.small { font-size: 13.5px; color: var(--muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; }
+  .jarcol { position: static; }
+  .jarSlot { height: clamp(190px, 30vh, 270px); }
+  body.playing .jarSlot { height: clamp(140px, 21vh, 190px); }
+  body.playing .legend { display: none; }
+}
+@media (max-width: 480px) {
+  .answers li { grid-template-columns: 24px minmax(0, 1fr) 4ch; grid-template-areas: "av who lm" "av said said" "av chips chips"; }
+  .answers .chips { justify-content: flex-start; }
+  .parties li { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .parties .what { grid-column: 2 / 3; }
+  .parties .btn { grid-column: 3; grid-row: 1 / span 2; }
+  .players li { grid-template-columns: 24px minmax(0, 1fr) auto 3.5ch; }
+  .players .jarn { display: none; }
+  .wordmark { font-size: 26px; }
+  .strip { gap: 3px; }
+  .tile { border-radius: 7px; }
+  .tile b { font-size: 14px; }
+  .tile small { display: none; }
+  .answer .btn { padding: 0 16px; }
+  .sum { grid-template-columns: 1fr 1fr; }
+  .sum div:last-child { grid-column: 1 / -1; }
+  .moons { font-size: 26px; letter-spacing: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<canvas id="fx" aria-hidden="true"></canvas>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="wordmark">Gl<i>o</i>wjar</span>
+      <span class="night" id="nightLabel">Night #1</span>
+    </div>
+    <nav class="tools" aria-label="Game options">
+      <button class="icon" id="btnSound" type="button" aria-pressed="true" aria-label="Sound" title="Sound on or off">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path id="soundWaves" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+      </button>
+      <button class="icon" id="btnStats" type="button" aria-label="Your stats" title="Your stats">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20V12M12 20V5M19 20v-9"/></svg>
+      </button>
+      <button class="icon" id="btnHelp" type="button" aria-label="How to play" title="How to play">?</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="jarcol" aria-label="Your jar">
+      <div class="jarSlot" id="jarSlot">
+        <div class="floats" id="floats"></div>
+        <div class="jarMeta"><b id="jarCount">0/26</b> letters in the jar · <span id="sealCount">0 sealed</span></div>
+      </div>
+      <div class="strip" id="strip" aria-label="Letters caught so far"></div>
+      <ul class="legend" id="legend" aria-label="Lumens per letter"></ul>
+    </section>
+
+    <section class="play">
+      <div class="card" id="panel"></div>
+      <div class="card social" id="socialCard" hidden></div>
+      <div class="card social" id="boardCard" hidden></div>
+      <div class="card tonight">
+        <h3 id="tonightTitle">Tonight’s seven</h3>
+        <ol id="tonight"></ol>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="helpDlg" aria-labelledby="helpTitle">
+  <button class="icon close" type="button" data-close aria-label="Close">✕</button>
+  <h2 id="helpTitle">How to play</h2>
+  <ol>
+    <li>Each night has seven categories, the same for everyone. You get 30 seconds for each.</li>
+    <li>Type anything that fits. If it counts, every letter you haven’t caught yet flies into your jar as a firefly.</li>
+    <li>Rare letters glow brighter. An E is worth 4 lumens; a Q or Z is worth 50.</li>
+    <li>Catch all 26 to seal the jar for +100 lumens. A fresh jar opens for the rest of the night.</li>
+    <li>All seven categories are listed from the start, so plan where your Q, Z, J and X will come from.</li>
+    <li>Wrong answers cost nothing. Keep trying until the wick burns out, or pass.</li>
+  </ol>
+  <h3 class="dlgsub">Playing with friends</h3>
+  <p>Press <b>Play with friends</b> to open a party. Anyone you’ve shared this page with sees it under <b>Here now</b> and can join with one tap or the four-letter code. Everyone gets the same category at the same moment. When two players give the same answer, both get half the lumens. Finish the nightly hunt and your score lands on <b>Tonight’s board</b>.</p>
+  <table class="tiers" id="tierTable"></table>
+  <p class="small">Answer lists are hand-built, so the odd valid answer may be missing. Small typos are forgiven.</p>
+</dialog>
+
+<dialog id="statsDlg" aria-labelledby="statsTitle">
+  <button class="icon close" type="button" data-close aria-label="Close">✕</button>
+  <h2 id="statsTitle">Your nights</h2>
+  <div class="stats" id="statsBody"></div>
+  <p class="small">Stats live in this browser only.</p>
+</dialog>
+
+<script>
+// Glowjar category lists. Items are comma-separated; aliases for one item are joined with "/".
+// The first name in an alias group is the display name.
+const RAW_CATS = [
+{p:"A country", s:"Country", a:`Afghanistan,Albania,Algeria,Andorra,Angola,Antigua and Barbuda/Antigua,Argentina,Armenia,Australia,Austria,Azerbaijan,Bahamas,Bahrain,Bangladesh,Barbados,Belarus,Belgium,Belize,Benin,Bhutan,Bolivia,Bosnia and Herzegovina/Bosnia,Botswana,Brazil,Brunei,Bulgaria,Burkina Faso,Burundi,Cabo Verde/Cape Verde,Cambodia,Cameroon,Canada,Central African Republic,Chad,Chile,China,Colombia,Comoros,Republic of the Congo/Congo,Democratic Republic of the Congo/DR Congo/DRC,Costa Rica,Croatia,Cuba,Cyprus,Czechia/Czech Republic,Denmark,Djibouti,Dominica,Dominican Republic,Ecuador,Egypt,El Salvador,Equatorial Guinea,Eritrea,Estonia,Eswatini/Swaziland,Ethiopia,Fiji,Finland,France,Gabon,Gambia,Georgia,Germany,Ghana,Greece,Grenada,Guatemala,Guinea,Guinea-Bissau,Guyana,Haiti,Honduras,Hungary,Iceland,India,Indonesia,Iran,Iraq,Ireland,Israel,Italy,Ivory Coast/Cote d'Ivoire,Jamaica,Japan,Jordan,Kazakhstan,Kenya,Kiribati,Kosovo,Kuwait,Kyrgyzstan,Laos,Latvia,Lebanon,Lesotho,Liberia,Libya,Liechtenstein,Lithuania,Luxembourg,Madagascar,Malawi,Malaysia,Maldives,Mali,Malta,Marshall Islands,Mauritania,Mauritius,Mexico,Micronesia,Moldova,Monaco,Mongolia,Montenegro,Morocco,Mozambique,Myanmar/Burma,Namibia,Nauru,Nepal,Netherlands/Holland,New Zealand,Nicaragua,Niger,Nigeria,North Korea,North Macedonia/Macedonia,Norway,Oman,Pakistan,Palau,Palestine,Panama,Papua New Guinea,Paraguay,Peru,Philippines,Poland,Portugal,Qatar,Romania,Russia,Rwanda,Saint Kitts and Nevis,Saint Lucia,Saint Vincent and the Grenadines,Samoa,San Marino,Sao Tome and Principe,Saudi Arabia,Senegal,Serbia,Seychelles,Sierra Leone,Singapore,Slovakia,Slovenia,Solomon Islands,Somalia,South Africa,South Korea/Korea,South Sudan,Spain,Sri Lanka,Sudan,Suriname,Sweden,Switzerland,Syria,Taiwan,Tajikistan,Tanzania,Thailand,Timor-Leste/East Timor,Togo,Tonga,Trinidad and Tobago,Tunisia,Turkey/Turkiye,Turkmenistan,Tuvalu,Uganda,Ukraine,United Arab Emirates/UAE,United Kingdom/UK/Britain/Great Britain,United States/USA/US/America/United States of America,Uruguay,Uzbekistan,Vanuatu,Vatican City/Vatican/Holy See,Venezuela,Vietnam,Yemen,Zambia,Zimbabwe,England,Scotland,Wales,Northern Ireland`},
+
+{p:"A US state", s:"US state", a:`Alabama,Alaska,Arizona,Arkansas,California,Colorado,Connecticut,Delaware,Florida,Georgia,Hawaii,Idaho,Illinois,Indiana,Iowa,Kansas,Kentucky,Louisiana,Maine,Maryland,Massachusetts,Michigan,Minnesota,Mississippi,Missouri,Montana,Nebraska,Nevada,New Hampshire,New Jersey,New Mexico,New York,North Carolina,North Dakota,Ohio,Oklahoma,Oregon,Pennsylvania,Rhode Island,South Carolina,South Dakota,Tennessee,Texas,Utah,Vermont,Virginia,Washington/Washington State,West Virginia,Wisconsin,Wyoming`},
+
+{p:"A chemical element", s:"Element", a:`Hydrogen,Helium,Lithium,Beryllium,Boron,Carbon,Nitrogen,Oxygen,Fluorine,Neon,Sodium,Magnesium,Aluminium/Aluminum,Silicon,Phosphorus,Sulfur/Sulphur,Chlorine,Argon,Potassium,Calcium,Scandium,Titanium,Vanadium,Chromium,Manganese,Iron,Cobalt,Nickel,Copper,Zinc,Gallium,Germanium,Arsenic,Selenium,Bromine,Krypton,Rubidium,Strontium,Yttrium,Zirconium,Niobium,Molybdenum,Technetium,Ruthenium,Rhodium,Palladium,Silver,Cadmium,Indium,Tin,Antimony,Tellurium,Iodine,Xenon,Caesium/Cesium,Barium,Lanthanum,Cerium,Praseodymium,Neodymium,Promethium,Samarium,Europium,Gadolinium,Terbium,Dysprosium,Holmium,Erbium,Thulium,Ytterbium,Lutetium,Hafnium,Tantalum,Tungsten/Wolfram,Rhenium,Osmium,Iridium,Platinum,Gold,Mercury,Thallium,Lead,Bismuth,Polonium,Astatine,Radon,Francium,Radium,Actinium,Thorium,Protactinium,Uranium,Neptunium,Plutonium,Americium,Curium,Berkelium,Californium,Einsteinium,Fermium,Mendelevium,Nobelium,Lawrencium,Rutherfordium,Dubnium,Seaborgium,Bohrium,Hassium,Meitnerium,Darmstadtium,Roentgenium,Copernicium,Nihonium,Flerovium,Moscovium,Livermorium,Tennessine,Oganesson`},
+
+{p:"A capital city", s:"Capital city", a:`Kabul,Tirana,Algiers,Andorra la Vella,Luanda,Saint John's,Buenos Aires,Yerevan,Canberra,Vienna,Baku,Nassau,Manama,Dhaka,Bridgetown,Minsk,Brussels,Belmopan,Porto-Novo,Thimphu,Sucre,La Paz,Sarajevo,Gaborone,Brasilia,Bandar Seri Begawan,Sofia,Ouagadougou,Gitega,Bujumbura,Praia,Phnom Penh,Yaounde,Ottawa,Bangui,N'Djamena,Santiago,Beijing/Peking,Bogota,Moroni,Brazzaville,Kinshasa,San Jose,Zagreb,Havana,Nicosia,Prague,Copenhagen,Djibouti,Roseau,Santo Domingo,Quito,Cairo,San Salvador,Malabo,Asmara,Tallinn,Mbabane,Lobamba,Addis Ababa,Suva,Helsinki,Paris,Libreville,Banjul,Tbilisi,Berlin,Accra,Athens,Saint George's,Guatemala City,Conakry,Bissau,Georgetown,Port-au-Prince,Tegucigalpa,Budapest,Reykjavik,New Delhi/Delhi,Jakarta,Tehran,Baghdad,Dublin,Jerusalem,Rome,Yamoussoukro,Abidjan,Kingston,Tokyo,Amman,Astana,Nairobi,Tarawa/South Tarawa,Pristina,Kuwait City/Kuwait,Bishkek,Vientiane,Riga,Beirut,Maseru,Monrovia,Tripoli,Vaduz,Vilnius,Luxembourg/Luxembourg City,Antananarivo,Lilongwe,Kuala Lumpur,Male,Bamako,Valletta,Majuro,Nouakchott,Port Louis,Mexico City,Palikir,Chisinau,Monaco,Ulaanbaatar/Ulan Bator,Podgorica,Rabat,Maputo,Naypyidaw/Naypyitaw,Windhoek,Yaren,Kathmandu,Amsterdam,Wellington,Managua,Niamey,Abuja,Pyongyang,Skopje,Oslo,Muscat,Islamabad,Ngerulmud,Ramallah,Panama City,Port Moresby,Asuncion,Lima,Manila,Warsaw,Lisbon,Doha,Bucharest,Moscow,Kigali,Basseterre,Castries,Kingstown,Apia,San Marino,Sao Tome,Riyadh,Dakar,Belgrade,Victoria,Freetown,Singapore,Bratislava,Ljubljana,Honiara,Mogadishu,Pretoria,Cape Town,Bloemfontein,Juba,Madrid,Sri Jayawardenepura Kotte/Kotte,Colombo,Khartoum,Paramaribo,Stockholm,Bern,Damascus,Taipei,Dushanbe,Dodoma,Bangkok,Dili,Lome,Nuku'alofa,Port of Spain,Tunis,Ankara,Ashgabat,Funafuti,Kampala,Kyiv/Kiev,Abu Dhabi,London,Washington/Washington DC,Montevideo,Tashkent,Port Vila,Vatican City,Caracas,Hanoi,Sanaa,Lusaka,Harare,Edinburgh,Cardiff,Belfast`},
+
+{p:"A fruit", s:"Fruit", a:`Apple,Apricot,Avocado,Banana,Blackberry,Blackcurrant,Blueberry,Boysenberry,Breadfruit,Cantaloupe,Starfruit/Star fruit/Carambola,Cherimoya,Cherry,Clementine,Cloudberry,Coconut,Cranberry,Currant,Custard apple,Damson,Date,Dragon fruit/Dragonfruit/Pitaya,Durian,Elderberry,Feijoa,Fig,Gooseberry,Grape,Grapefruit,Guava,Honeydew,Huckleberry,Jabuticaba,Jackfruit,Jambul,Jujube,Kiwi/Kiwifruit,Kumquat,Lemon,Lime,Lingonberry,Loganberry,Longan,Loquat,Lychee/Litchi,Mandarin,Mango,Mangosteen,Marionberry,Medlar,Melon,Mulberry,Nectarine,Olive,Orange,Papaya,Passion fruit/Passionfruit,Pawpaw,Peach,Pear,Persimmon,Physalis,Pineapple,Plantain,Plum,Pluot,Pomegranate,Pomelo,Prickly pear,Prune,Quince,Raisin,Rambutan,Raspberry,Redcurrant,Salak,Salmonberry,Sapodilla,Satsuma,Soursop,Strawberry,Sultana,Tamarillo,Tamarind,Tangelo,Tangerine,Ugli fruit/Ugli,Watermelon,Yuzu,Ackee,Acai,Bilberry,Kiwano,Mamey,Miracle fruit,Noni,Quandong,Sloe,White currant,Yangmei,Tomato,Blood orange,Buddha's hand,Finger lime,Nashi/Asian pear,Bergamot,Cranberry,Crabapple,Citron,Calamansi,Langsat,Mangaba,Jostaberry,Tayberry,Dewberry,Wineberry,Ximenia`},
+
+{p:"A vegetable", s:"Vegetable", a:`Artichoke,Arugula/Rocket,Asparagus,Aubergine/Eggplant,Beetroot/Beet,Bok choy/Pak choi,Broccoli,Broccolini,Brussels sprout,Butternut squash/Butternut,Cabbage,Bell pepper/Capsicum/Pepper,Carrot,Cauliflower,Celeriac,Celery,Chard/Swiss chard,Chicory,Chilli/Chili/Chile,Collard greens/Collards,Corn/Sweetcorn/Maize,Courgette/Zucchini,Cucumber,Daikon,Endive,Fennel,Garlic,Ginger,Green bean,Horseradish,Jicama,Kale,Kohlrabi,Leek,Lettuce,Mushroom,Mustard greens,Okra,Onion,Parsnip,Pea,Potato,Pumpkin,Radicchio,Radish,Rutabaga/Swede,Spring onion/Scallion/Green onion,Shallot,Spinach,Squash,Sweet potato,Taro,Tomatillo,Turnip,Watercress,Yam,Cassava/Yuca/Manioc,Lotus root,Bamboo shoot,Bean sprout,Edamame,Broad bean/Fava bean,Runner bean,Mangetout/Snow pea,Sugar snap pea/Sugar snap,Acorn squash,Spaghetti squash,Celtuce,Salsify,Samphire,Sorrel,Romanesco,Napa cabbage/Chinese cabbage,Red cabbage,Savoy cabbage,Jerusalem artichoke/Sunchoke,Water chestnut,Gherkin,Kai lan,Choy sum,Bitter melon/Bitter gourd,Bottle gourd,Chayote,Cardoon,Fiddlehead,Purslane,Lamb's lettuce/Corn salad,Frisee,Kidney bean,Black bean,Chickpea,Lentil,Shiitake,Leaf beet,Wasabi,Yardlong bean,Mooli,Marrow,Gourd,Kabocha,Plantain,Okahijiki,Zucchini flower`},
+
+{p:"A mammal", s:"Mammal", a:`Aardvark,Aardwolf,Alpaca,Anteater,Antelope,Armadillo,Baboon,Badger,Bandicoot,Bat,Bear,Beaver,Bison,Boar,Bobcat,Bonobo,Buffalo,Bushbaby/Galago,Camel,Capybara,Caracal,Caribou,Cat,Chamois,Cheetah,Chimpanzee/Chimp,Chinchilla,Chipmunk,Civet,Coati,Cougar/Puma/Mountain lion,Cow,Coyote,Deer,Dhole,Dingo,Dog,Dolphin,Donkey,Dormouse,Dugong,Echidna,Eland,Elephant,Elk,Ermine,Ferret,Fennec fox/Fennec,Fox,Gazelle,Gerbil,Gibbon,Giraffe,Wildebeest/Gnu,Goat,Gopher,Gorilla,Guinea pig,Hamster,Hare,Hedgehog,Hippopotamus/Hippo,Horse,Hyena,Hyrax,Ibex,Impala,Jackal,Jaguar,Jaguarundi,Jerboa,Kangaroo,Kinkajou,Koala,Kudu,Lemming,Lemur,Leopard,Lion,Llama,Lynx,Macaque,Manatee,Mandrill,Marmoset,Marmot,Meerkat,Mink,Mole,Mongoose,Monkey,Moose,Mouse,Mule,Musk ox/Muskox,Muskrat,Narwhal,Numbat,Ocelot,Okapi,Opossum/Possum,Orangutan,Orca/Killer whale,Oryx,Otter,Ox,Panda/Giant panda,Pangolin,Panther,Peccary,Pig,Platypus,Porcupine,Porpoise,Prairie dog,Pronghorn,Quokka,Quoll,Rabbit,Raccoon,Rat,Reindeer,Rhinoceros/Rhino,Sable,Seal,Sea lion,Serval,Sheep,Shrew,Skunk,Sloth,Squirrel,Stoat,Tapir,Tarsier,Tasmanian devil,Tiger,Vicuna,Vole,Wallaby,Walrus,Warthog,Weasel,Whale,Wolf,Wolverine,Wombat,Yak,Zebra,Zebu,Zorilla,Dik-dik,Gerenuk,Springbok,Gemsbok,Nyala,Bongo,Saiga,Takin,Markhor,Gaur,Banteng,Anoa,Babirusa,Fossa,Aye-aye,Binturong,Cuscus,Sugar glider,Bilby,Potoroo,Bettong,Kowari,Mara,Agouti,Paca,Degu,Viscacha,Coypu/Nutria,Tenrec,Solenodon,Colugo,Tree shrew,Loris,Slow loris,Howler monkey,Capuchin,Tamarin,Saki,Uakari,Gelada,Proboscis monkey,Langur,Guanaco,Blue whale,Humpback whale,Beluga,Sperm whale,Polar bear,Grizzly bear,Sun bear,Sloth bear,Red panda,Snow leopard,Clouded leopard,African wild dog,Maned wolf,Bush dog,Raccoon dog,Arctic fox,Kit fox,Ringtail,Mammoth,Woolly mammoth,Mastodon,Water buffalo,Yapok,Quagga,Marten,Polecat,Pine marten,Fisher,Hartebeest,Topi,Duiker,Bushbuck,Waterbuck,Sitatunga,Okapi,Muntjac,Chevrotain,Pudu,Vaquita,Manul/Pallas's cat,Margay,Oncilla,Kodkod,Jaguarundi,Wallaroo,Pademelon,Quokka`},
+
+{p:"A bird", s:"Bird", a:`Albatross,Auk,Avocet,Barn owl,Bittern,Blackbird,Blue jay,Bluebird,Booby,Budgerigar/Budgie,Bullfinch,Bunting,Bustard,Buzzard,Canary,Capercaillie,Cardinal,Cassowary,Chaffinch,Chickadee,Chicken,Chough,Cockatiel,Cockatoo,Condor,Coot,Cormorant,Corncrake,Crane,Crow,Cuckoo,Curlew,Dipper,Dodo,Dove,Duck,Dunnock,Eagle,Egret,Eider,Emu,Falcon,Finch,Flamingo,Flycatcher,Frigatebird,Fulmar,Gannet,Godwit,Goldfinch,Goose,Goshawk,Grebe,Grouse,Guillemot,Gull/Seagull,Harrier,Hawk,Heron,Hoatzin,Hoopoe,Hornbill,Hummingbird,Ibis,Jackdaw,Jay,Kakapo,Kea,Kestrel,Kingfisher,Kite,Kiwi,Kittiwake,Kookaburra,Lapwing,Lark,Lorikeet,Lovebird,Lyrebird,Macaw,Magpie,Mallard,Martin,Meadowlark,Merlin,Mockingbird,Moorhen,Nightingale,Nightjar,Nuthatch,Oriole,Osprey,Ostrich,Ovenbird,Owl,Oystercatcher,Parakeet,Parrot,Partridge,Peacock/Peafowl/Peahen,Pelican,Penguin,Peregrine/Peregrine falcon,Petrel,Pheasant,Pigeon,Pipit,Plover,Ptarmigan,Puffin,Quail,Quetzal,Raven,Razorbill,Redstart,Rhea,Roadrunner,Robin,Rook,Sandpiper,Secretary bird,Shrike,Siskin,Skua,Skylark,Snipe,Sparrow,Sparrowhawk,Spoonbill,Starling,Stork,Swallow,Swan,Swift,Tanager,Tern,Thrush,Tit,Toucan,Treecreeper,Turkey,Vulture,Wagtail,Warbler,Waxwing,Weaver,Wheatear,Whimbrel,Whip-poor-will,Woodcock,Woodpecker,Wren,Yellowhammer,Zebra finch,Shoebill,Sunbird,Bee-eater,Roller,Trogon,Jacana,Frogmouth,Potoo,Nene,Takahe,Weka,Tui,Bowerbird,Honeyeater,Grackle,Cowbird,Bobolink,Junco,Towhee,Vireo,Kinglet,Goldcrest,Firecrest,Jabiru,Marabou,Hammerkop,Turaco,Mousebird,Oxpecker,Drongo,Myna/Mynah,Bulbul,Babbler,Sapsucker,Flicker,Kingbird,Phoebe,Pewee,Killdeer,Dowitcher,Turnstone,Sanderling,Dunlin,Ruff,Stint,Phalarope,Gadwall,Wigeon,Teal,Pintail,Shoveler,Pochard,Scaup,Goldeneye,Merganser,Smew,Bufflehead,Canvasback,Loon/Diver,Shearwater,Tropicbird,Anhinga,Nighthawk,Chukar,Guineafowl,Kagu,Seriema,Tinamou,Coucal,Blue tit,Great tit,Long-tailed tit,Linnet,Twite,Redwing,Fieldfare,Nightingale,Wryneck,Hobby,Harpy eagle,Bald eagle,Golden eagle,Kakariki,Kaka,Rosella,Galah,Corella,Lammergeier,Quelea`},
+
+{p:"A dog breed", s:"Dog breed", a:`Affenpinscher,Afghan hound,Airedale/Airedale terrier,Akita,Alaskan malamute/Malamute,Basenji,Basset hound/Basset,Beagle,Bearded collie,Bedlington terrier,Bernese mountain dog,Bichon frise,Bloodhound,Border collie,Border terrier,Borzoi,Boston terrier,Boxer,Briard,Brittany,Bull terrier,Bulldog,Bullmastiff,Cairn terrier,Cavalier King Charles spaniel/Cavalier,Chihuahua,Chinese crested,Chow chow/Chow,Cocker spaniel,Collie,Corgi,Dachshund,Dalmatian,Dobermann/Doberman/Doberman pinscher,English setter,Foxhound,French bulldog/Frenchie,German shepherd/Alsatian,German shorthaired pointer,Golden retriever,Goldendoodle,Great Dane,Great Pyrenees,Greyhound,Havanese,Husky/Siberian husky,Irish setter,Irish wolfhound,Italian greyhound,Jack Russell/Jack Russell terrier,Japanese chin,Keeshond,Kerry blue terrier,Komondor,Kuvasz,Labrador/Labrador retriever/Lab,Labradoodle,Lhasa apso,Leonberger,Maltese,Mastiff,Miniature schnauzer,Newfoundland,Norfolk terrier,Norwich terrier,Old English sheepdog,Otterhound,Papillon,Pekingese,Pinscher,Pointer,Pomeranian,Poodle,Pug,Puli,Rhodesian ridgeback,Rottweiler,Saint Bernard,Saluki,Samoyed,Schipperke,Schnauzer,Scottish terrier/Scottie,Shar pei,Shetland sheepdog/Sheltie,Shiba inu,Shih tzu,Staffordshire bull terrier/Staffie,Vizsla,Weimaraner,West Highland terrier/Westie/West Highland white terrier,Whippet,Wolfhound,Yorkshire terrier/Yorkie,Xoloitzcuintli/Xolo,Azawakh,Sloughi,Pharaoh hound,Ibizan hound,Cane corso,Dogo Argentino,Boerboel,Kangal,Anatolian shepherd,Tibetan mastiff,Tibetan terrier,Tibetan spaniel,Lowchen,Coton de Tulear,Bolognese,Kooikerhondje,Spitz,Finnish spitz,Norwegian elkhound,Lundehund,Swedish vallhund,Kelpie,Australian shepherd/Aussie,Australian cattle dog/Blue heeler/Heeler,Catahoula,Coonhound,Bluetick coonhound,Redbone coonhound,Plott hound,Harrier,Beauceron,Belgian malinois/Malinois,Tervuren,Groenendael,Bouvier des Flandres/Bouvier,Brussels griffon,Dandie Dinmont terrier,Skye terrier,Sealyham terrier,Lakeland terrier,Welsh terrier,Manchester terrier,Rat terrier,Fox terrier/Wire fox terrier,Parson Russell terrier,Glen of Imaal terrier,Soft coated wheaten terrier/Wheaten terrier,Irish terrier,Silky terrier,Australian terrier,Miniature pinscher/Min pin,Portuguese water dog,Spanish water dog,Lagotto Romagnolo,Barbet,Bracco Italiano,Spinone,Chesapeake Bay retriever,Flat-coated retriever,Curly-coated retriever,Nova Scotia duck tolling retriever/Toller,Springer spaniel/English springer spaniel,Welsh springer spaniel,Clumber spaniel,Sussex spaniel,Field spaniel,Boykin spaniel,Irish water spaniel,Cockapoo,Maltipoo,Puggle,Schnoodle,Jindo,Shikoku,Kai ken,Kishu,Tosa,Chinook,Eurasier,Mudi,Pumi,Akbash,Caucasian shepherd,Dogue de Bordeaux,Neapolitan mastiff,Black Russian terrier,Giant schnauzer,Entlebucher,Appenzeller,Greater Swiss mountain dog,Karelian bear dog,Laika,Czechoslovakian wolfdog,Thai ridgeback,Japanese spitz,Volpino,Berger Picard,Pyrenean shepherd,Bergamasco,Cesky terrier,Jagdterrier,Kromfohrlander,Sapsali,Peruvian Inca orchid,Greyhound,Lurcher,Dachshund`},
+
+{p:"A musical instrument", s:"Instrument", a:`Accordion,Alphorn,Autoharp,Bagpipes/Bagpipe,Balalaika,Bandoneon,Banjo,Baritone,Double bass/Contrabass/Bass,Bass guitar,Bassoon,Bell,Bodhran,Bongos/Bongo,Bouzouki,Bugle,Castanets,Celesta,Cello/Violoncello,Chimes,Cimbalom,Clarinet,Clavichord,Conga,Contrabassoon,Cornet,Cowbell,Cymbal,Didgeridoo,Djembe,Drum,Drum kit,Dulcimer,Erhu,Euphonium,Fiddle,Fife,Flugelhorn,Flute,French horn/Horn,Glockenspiel,Gong,Guitar,Guzheng,Harmonica,Harmonium,Harp,Harpsichord,Hurdy-gurdy,Kalimba,Kazoo,Keyboard,Koto,Lute,Lyre,Mandolin,Maracas,Marimba,Melodica,Mellophone,Oboe,Ocarina,Organ,Oud,Panpipes/Pan flute,Piano,Piccolo,Pipa,Recorder,Saxophone/Sax,Shakuhachi,Shamisen,Sitar,Snare drum,Sousaphone,Spinet,Steel drum/Steelpan,Synthesizer/Synth,Tabla,Tambourine,Theremin,Timpani/Kettledrum,Triangle,Trombone,Trumpet,Tuba,Ukulele/Uke,Vibraphone,Viola,Violin,Washboard,Tin whistle/Whistle,Xylophone,Zither,Banjolele,Cajon,Cuica,Guiro,Tabor,Tom-tom,Bass drum,Handpan/Hang,Glass harmonica,Cor anglais/English horn,Sackbut,Serpent,Crumhorn,Shawm,Rebec,Viol,Viola da gamba,Theorbo,Cittern,Gittern,Psaltery,Santoor,Sarangi,Sarod,Veena,Shehnai,Bansuri,Mridangam,Ghatam,Duduk,Zurna,Qanun/Kanun,Darbuka/Doumbek,Riq,Bendir,Setar,Kamancheh,Saz,Baglama,Gusle,Kantele,Nyckelharpa,Hardanger fiddle,Uilleann pipes,Concertina,Melodeon,Mbira,Kora,Balafon,Talking drum,Udu,Berimbau,Charango,Quena,Cuatro,Tiple,Vihuela,Guitarron,Steel guitar,Pedal steel,Dobro,Lap steel,Keytar,Jaw harp/Mouth harp,Spoons,Claves,Shaker,Cabasa,Vibraslap,Flexatone,Woodblock/Wood block,Temple block,Rainstick/Rain stick,Tubular bells,Crotales,Gamelan,Angklung,Khene,Sheng,Suona,Dizi,Xiao,Hulusi,Guqin,Yangqin,Pipe organ,Taiko,Gayageum/Kayagum,Janggu,Washtub bass,Harmonica,Ophicleide,Heckelphone,Sarrusophone,Contrabass clarinet,Bass clarinet,Alto saxophone,Tenor saxophone,Soprano saxophone,Clavinet,Mellotron,Ondes Martenot,Calliope,Carillon,Orchestrion`},
+
+{p:"A sport", s:"Sport", a:`Archery,Badminton,Baseball,Basketball,Biathlon,Bobsleigh/Bobsled,Bowling,Boxing,Canoeing,Cricket,Croquet,Curling,Cycling,Darts,Decathlon,Diving,Dodgeball,Equestrian/Horse riding,Fencing,Field hockey,Football/Soccer/Association football,American football,Golf,Gymnastics,Handball,Heptathlon,Hockey/Ice hockey,Hurling,Javelin,Judo,Karate,Kayaking,Kickboxing,Korfball,Lacrosse,Luge,Marathon,Motocross,Netball,Paddleboarding,Paragliding,Pentathlon/Modern pentathlon,Pickleball,Polo,Racquetball,Rafting,Rodeo,Rowing,Rugby/Rugby union/Rugby league,Sailing,Shooting,Skateboarding,Skeleton,Skiing,Ski jumping,Snooker,Billiards/Pool,Snowboarding,Softball,Squash,Sumo,Surfing,Swimming,Table tennis/Ping pong,Taekwondo,Tennis,Triathlon,Volleyball,Beach volleyball,Water polo,Weightlifting,Windsurfing,Wrestling,Kitesurfing,Parkour,Climbing/Rock climbing/Bouldering,Fishing/Angling,Cheerleading,Gaelic football,Australian rules football/Aussie rules,Sepak takraw,Kabaddi,Jai alai,Pelota,Bandy,Shinty,Camogie,Quadball/Quidditch,Ultimate frisbee/Ultimate,Disc golf,Petanque/Boules,Bocce,Horseshoes,Shuffleboard,Cornhole,Tug of war,Orienteering,Fell running,Steeplechase,Hurdles,Sprinting,Long jump,High jump,Triple jump,Pole vault,Shot put,Discus,Hammer throw,Speed skating,Figure skating,Ice dancing,Artistic swimming/Synchronised swimming/Synchronized swimming,Duathlon,Sambo,Jiu-jitsu/Jujitsu/Brazilian jiu-jitsu,Muay thai,Capoeira,Kendo,Aikido,Wushu,Kung fu,Mixed martial arts/MMA,Savate,Canoe polo,Underwater hockey,Teqball,Padel,Real tennis,Rackets,Fives,Stoolball,Rounders,Kickball,Floorball,Broomball,Ringette,Roller derby,Inline skating,BMX,Mountain biking,Formula One/Motor racing,NASCAR,Rallying,Karting,Drag racing,Powerboating,Bodybuilding,Powerlifting,Arm wrestling,Bodyboarding,Wakeboarding,Water skiing,Skydiving,BASE jumping,Hang gliding,Canyoning,Caving/Spelunking,Mountaineering,Ice climbing,Sled dog racing/Mushing,Skijoring,Trampolining,Dressage,Show jumping,Eventing,Horse racing,Harness racing,Polocrosse,Buzkashi,Cyclocross,Keirin,Fistball,Hurling,Lawn bowls,Racewalking,Cross-country skiing,Freestyle skiing,Slalom,Snowkiting,Sandboarding,Coasteering,Freediving,Spearfishing,Synchronised diving,Kho kho,Yabusame,Bossaball,Footvolley,Jousting`},
+
+{p:"A colour", s:"Colour", a:`Red,Orange,Yellow,Green,Blue,Indigo,Violet,Purple,Pink,Brown,Black,White,Grey/Gray,Cyan,Magenta,Maroon,Navy/Navy blue,Teal,Turquoise,Aqua,Aquamarine,Azure,Beige,Burgundy,Cerulean,Charcoal,Chartreuse,Coral,Crimson,Cream,Ecru,Emerald,Fuchsia,Gold,Ivory,Jade,Khaki,Lavender,Lilac,Lime,Mauve,Mint,Mustard,Ochre/Ocher,Olive,Peach,Periwinkle,Plum,Puce,Rose,Ruby,Rust,Saffron,Salmon,Sapphire,Scarlet,Sepia,Sienna,Burnt sienna,Silver,Slate,Tan,Taupe,Terracotta,Umber,Burnt umber,Vermilion/Vermillion,Wine,Amber,Apricot,Auburn,Bronze,Buff,Burnt orange,Cardinal,Carmine,Celadon,Cerise,Champagne,Chestnut,Chocolate,Cinnabar,Cobalt,Copper,Cornflower,Denim,Eggplant/Aubergine,Fawn,Forest green,Garnet,Ginger,Gunmetal,Harlequin,Heliotrope,Honey,Hunter green,Jet,Kelly green,Lemon,Magnolia,Mahogany,Malachite,Marigold,Moss,Mulberry,Nude,Onyx,Orchid,Oxblood,Pearl,Pewter,Pistachio,Pumpkin,Raspberry,Royal blue,Russet,Sage,Sand,Sky blue,Smoke,Snow,Tangerine,Thistle,Topaz,Ultramarine,Vanilla,Viridian,Wheat,Wisteria,Xanadu,Zaffre,Byzantium,Gamboge,Glaucous,Isabelline,Jasmine,Jonquil,Feldgrau,Falu red,Smalt,Sinopia,Celeste,Cyclamen,Fandango,Lapis lazuli/Lapis,Prussian blue,Payne's grey,Indian red,Ivory black,Lamp black,Titanium white,Alizarin,Cadmium yellow,Cadmium red,Hooker's green,Sap green,Phthalo blue,Quinacridone,Mikado yellow,Lemon chiffon,Blush,Coffee,Caramel,Mocha,Cocoa,Ebony,Obsidian,Sable,Claret,Cherry,Brick red,Blood red,Electric blue,Midnight blue,Baby blue,Powder blue,Steel blue,Ice blue,Duck egg/Duck egg blue,Eau de nil,Avocado,Pea green,Bottle green,Emerald green,Lime green,Neon green,Sea green,Jungle green,Hot pink,Baby pink,Salmon pink,Shocking pink,Bubblegum,Flamingo,Lilac,Amethyst,Aubergine,Imperial purple,Tyrian purple,Mauve,Grape,Raisin,Ash,Dove grey,Platinum,Champagne,Bone,Off-white,Eggshell,Linen,Oyster,Parchment,Khaki,Olive drab,Camel,Tawny,Butterscotch,Saffron,Canary yellow,Butter,Primrose,Daffodil,Sunflower,Citrine,Peridot,Jade,Verdigris,Cyan,Cerulean,Sapphire,Navy,Zinc`},
+
+{p:"Something in our solar system", s:"Solar system", a:`Sun,Mercury,Venus,Earth,Moon/Luna,Mars,Jupiter,Saturn,Uranus,Neptune,Pluto,Ceres,Eris,Haumea,Makemake,Sedna,Quaoar,Gonggong,Orcus,Phobos,Deimos,Io,Europa,Ganymede,Callisto,Amalthea,Himalia,Thebe,Metis,Adrastea,Titan,Enceladus,Mimas,Tethys,Dione,Rhea,Iapetus,Hyperion,Phoebe,Janus,Epimetheus,Pandora,Prometheus,Atlas,Pan,Daphnis,Miranda,Ariel,Umbriel,Titania,Oberon,Puck,Triton,Nereid,Proteus,Larissa,Charon,Nix,Hydra,Kerberos,Styx,Dysnomia,Halley's Comet/Halley,Vesta,Pallas,Hygiea,Juno,Psyche,Bennu,Ryugu,Eros,Ida,Gaspra,Arrokoth,Asteroid belt,Kuiper belt,Oort cloud,Comet,Asteroid,Hale-Bopp,Meteor,Meteoroid,Heliosphere,Solar wind,Great Red Spot,Olympus Mons,Valles Marineris,Weywot,Vanth,Ilmare,Xiangliu,Hiiaka,Namaka,Dactyl,Dimorphos,Didymos,Apophis,Itokawa,Lutetia,Steins,Mathilde,Kleopatra,Chiron,Sycorax,Caliban,Ophelia,Cordelia,Desdemona,Juliet,Portia,Rosalind,Belinda,Cupid,Mab,Perdita,Bianca,Cressida,Margaret,Prospero,Setebos,Stephano,Trinculo,Francisco,Ferdinand,Galatea,Despina,Thalassa,Naiad,Halimede,Psamathe,Sao,Laomedeia,Neso,Hippocamp,Leda,Elara,Carme,Ananke,Pasiphae,Sinope,Lysithea,Callirrhoe,Themisto,Ymir,Paaliaq,Kiviuq,Ijiraq,Siarnaq,Tarvos,Mundilfari,Skathi,Suttungr,Thrymr,Albiorix,Erriapus,Tarqeq,Fenrir,Bestla,Loge`},
+
+{p:"A figure from Greek or Roman myth", s:"Greek & Roman myth", a:`Zeus,Hera,Poseidon,Demeter,Athena/Athene,Apollo,Artemis,Ares,Aphrodite,Hephaestus,Hermes,Hestia,Dionysus,Hades,Persephone,Eros,Nike,Pan,Gaia,Uranus/Ouranos,Cronus/Kronos,Rhea,Hecate,Helios,Selene,Eos,Iris,Hebe,Nemesis,Tyche,Morpheus,Hypnos,Thanatos,Nyx,Erebus,Chaos,Tartarus,Atlas,Prometheus,Epimetheus,Oceanus,Tethys,Hyperion,Themis,Mnemosyne,Phoebe,Coeus,Crius,Iapetus,Theia,Asclepius,Hygieia,Aeolus,Boreas,Zephyrus,Notus,Eurus,Triton,Proteus,Nereus,Amphitrite,Thetis,Calypso,Circe,Medusa,Pegasus,Heracles/Hercules,Perseus,Theseus,Achilles,Odysseus/Ulysses,Jason,Orpheus,Eurydice,Pandora,Psyche,Adonis,Narcissus,Echo,Icarus,Daedalus,Minotaur,Cerberus,Hydra,Chimera,Cyclops,Polyphemus,Sphinx,Harpy,Siren,Charybdis,Scylla,Typhon,Echidna,Ganymede,Leto,Dione,Metis,Maia,Semele,Europa,Io,Callisto,Danae,Leda,Helen/Helen of Troy,Paris,Hector,Priam,Agamemnon,Menelaus,Ajax,Cassandra,Penelope,Telemachus,Ariadne,Phaedra,Medea,Antigone,Oedipus,Electra,Clytemnestra,Orestes,Tantalus,Sisyphus,Midas,Arachne,Niobe,Pygmalion,Galatea,Atalanta,Bellerophon,Castor,Pollux,Charon,Calliope,Clio,Erato,Euterpe,Melpomene,Polyhymnia,Terpsichore,Thalia,Urania,Clotho,Lachesis,Atropos,Erinyes/Furies,Jupiter,Juno,Neptune,Minerva,Mars,Venus,Vulcan,Mercury,Vesta,Ceres,Bacchus,Pluto,Diana,Cupid,Janus,Saturn,Faunus,Aurora,Sol,Luna,Fortuna,Victoria,Bellona,Proserpina,Vertumnus,Pomona,Flora,Terminus,Quirinus,Romulus,Remus,Aeneas,Dido,Achates,Patroclus,Briseis,Hippolyta,Penthesilea,Andromeda,Cassiopeia,Cepheus,Danaids,Hyacinth/Hyacinthus,Endymion,Ixion,Prometheus,Pasiphae,Minos,Rhadamanthus,Aeacus,Asterion,Talos,Laocoon,Philoctetes,Nestor,Diomedes,Aegeus,Hippolytus,Iphigenia,Chrysaor,Geryon,Ladon,Argus,Orion,Actaeon,Callisto,Syrinx,Daphne,Persephone,Kore,Zagreus,Silenus,Priapus,Asteria,Astraea,Phaethon,Deucalion,Pyrrha,Lycaon,Ixion,Kratos,Bia,Zelus,Eris,Harmonia,Phobos,Deimos,Hymen,Iacchus,Plutus,Tyche,Pheme,Momus,Nereids,Oceanids,Hesperides,Pleiades,Gorgons,Stheno,Euryale,Graeae,Lamia,Empusa,Cacus,Picus,Saturnus,Liber,Libera,Ops,Consus,Sylvanus/Silvanus,Lupercus,Egeria,Camilla,Turnus,Lavinia,Ascanius,Anchises,Evander`},
+
+{p:"A Shakespeare play", s:"Shakespeare play", a:`Hamlet,Macbeth,Othello,King Lear/Lear,Romeo and Juliet,Julius Caesar,The Tempest,A Midsummer Night's Dream/Midsummer Night's Dream,Much Ado About Nothing,Twelfth Night,As You Like It,The Merchant of Venice,The Taming of the Shrew,The Comedy of Errors,The Merry Wives of Windsor,Measure for Measure,All's Well That Ends Well,Love's Labour's Lost/Love's Labours Lost,The Two Gentlemen of Verona,The Winter's Tale,Cymbeline,Pericles/Pericles Prince of Tyre,Troilus and Cressida,Coriolanus,Titus Andronicus,Timon of Athens,Antony and Cleopatra,Richard II/Richard the Second,Richard III/Richard the Third,Henry IV/Henry the Fourth,Henry V/Henry the Fifth,Henry VI/Henry the Sixth,Henry VIII/Henry the Eighth,King John,The Two Noble Kinsmen,Edward III/Edward the Third,Sir Thomas More,Cardenio`},
+
+{p:"A constellation (one of the official 88)", s:"Constellation", a:`Andromeda,Antlia,Apus,Aquarius,Aquila,Ara,Aries,Auriga,Bootes,Caelum,Camelopardalis,Cancer,Canes Venatici,Canis Major,Canis Minor,Capricornus/Capricorn,Carina,Cassiopeia,Centaurus,Cepheus,Cetus,Chamaeleon,Circinus,Columba,Coma Berenices,Corona Australis,Corona Borealis,Corvus,Crater,Crux/Southern Cross,Cygnus,Delphinus,Dorado,Draco,Equuleus,Eridanus,Fornax,Gemini,Grus,Hercules,Horologium,Hydra,Hydrus,Indus,Lacerta,Leo,Leo Minor,Lepus,Libra,Lupus,Lynx,Lyra,Mensa,Microscopium,Monoceros,Musca,Norma,Octans,Ophiuchus,Orion,Pavo,Pegasus,Perseus,Phoenix,Pictor,Pisces,Piscis Austrinus,Puppis,Pyxis,Reticulum,Sagitta,Sagittarius,Scorpius/Scorpio,Sculptor,Scutum,Serpens,Sextans,Taurus,Telescopium,Triangulum,Triangulum Australe,Tucana,Ursa Major/Great Bear,Ursa Minor/Little Bear,Vela,Virgo,Volans,Vulpecula`},
+
+{p:"A cheese", s:"Cheese", a:`Brie,Camembert,Cheddar,Gouda,Edam,Emmental/Emmentaler/Emmenthal,Gruyere,Parmesan/Parmigiano Reggiano/Parmigiano,Pecorino/Pecorino Romano,Mozzarella,Burrata,Ricotta,Mascarpone,Gorgonzola,Roquefort,Stilton,Feta,Halloumi,Manchego,Provolone,Fontina,Taleggio,Asiago,Havarti,Jarlsberg,Munster/Muenster,Monterey Jack,Colby,Pepper jack,Swiss,Wensleydale,Red Leicester/Leicester,Double Gloucester/Gloucester,Lancashire,Caerphilly,Cheshire,Derby,Stinking Bishop,Shropshire blue,Cornish yarg/Yarg,Comte,Beaufort,Reblochon,Raclette,Tomme,Morbier,Epoisses,Saint-Nectaire,Cantal,Brillat-Savarin,Boursin,Port Salut,Chevre/Goat's cheese/Goat cheese,Valencay,Mimolette,Maroilles,Limburger,Tilsit/Tilsiter,Quark,Paneer,Cottage cheese,Cream cheese,Queso fresco,Cotija,Oaxaca,Manouri,Kefalotyri,Graviera,Kasseri,Labneh,Akkawi,Nabulsi,Scamorza,Stracchino,Robiola,Fiore Sardo,Grana Padano,Caciocavallo,Bel Paese,Castelmagno,Montasio,Ossau-Iraty,Idiazabal,Mahon,Tetilla,Cabrales,Torta del Casar,Roncal,Zamorano,Leerdammer,Maasdam,Appenzeller,Tete de Moine,Vacherin/Vacherin Mont d'Or,Sbrinz,Danish blue/Danablu,Esrom,Samso,Brunost/Gjetost,Nokkelost,Vasterbottensost,Oscypek,Bryndza,Kashkaval,Sirene,Telemea,Gbejna,Cambozola,Bergkase,Butterkase,Harzer,Panela,Chaource,Neufchatel,Langres,Abondance,Bleu d'Auvergne,Fourme d'Ambert,Ricotta salata,Squacquerone,Crescenza,Stracciatella,Bocconcini,Beemster,Boerenkaas,Red Windsor,Sage Derby,Cornish blue,Blue vinny/Dorset blue vinny,Single Gloucester,Caboc,Dunlop,Lanark blue,Cashel blue,Gubbeen,Durrus,Coolea,Ardrahan,Xynotyro,Xynomyzithra,Myzithra,Anthotyros,Kefalograviera,Caciotta,Quartirolo,Puzzone di Moena,Queso blanco,Requeson,Chhena,Kalari,Churpi,Rushan,Danbo,Herrgardsost,Graddost,Prastost,Lappi,Leipajuusto/Juustoleipa,Old Amsterdam,Mozzarella di bufala,Provola,Smoked cheese,Halloumi,Feta,Blue cheese,String cheese,American cheese,Velveeta,Stilton,Camembert,Quargel,Olomoucke tvaruzky`},
+
+{p:"A pasta shape", s:"Pasta shape", a:`Spaghetti,Linguine,Fettuccine/Fettuccini,Tagliatelle,Pappardelle,Penne,Rigatoni,Fusilli,Farfalle/Bow tie,Macaroni,Ravioli,Tortellini,Tortelloni,Lasagne/Lasagna,Cannelloni,Orzo/Risoni,Orecchiette,Conchiglie/Shells,Gnocchi,Ziti,Bucatini,Vermicelli,Capellini/Angel hair,Cavatappi,Cavatelli,Ditalini,Gemelli,Paccheri,Radiatori,Rotini,Ruote/Wagon wheels,Strozzapreti,Trofie,Agnolotti,Anelli,Campanelle,Casarecce,Fregola/Fregula,Garganelli,Lumache,Mafalde/Mafaldine,Malloreddus,Maltagliati,Manicotti,Mezzelune,Pastina,Pici,Pipe rigate/Pipe,Quadrefiore,Quadretti,Reginette,Rotelle,Sedani,Stelline,Tagliolini,Tortiglioni,Trenette,Tripolini,Tubetti,Zitoni,Alfabeto,Acini di pepe,Bigoli,Busiate,Calamarata,Candele,Cappelletti,Caramelle,Corzetti,Culurgiones,Fileja,Lorighittas,Mezze maniche,Perciatelli,Pizzoccheri,Scialatielli,Spaghettini,Spaghettoni,Stringozzi,Tajarin,Testaroli,Umbricelli,Zite,Cappellacci,Cappellini,Conchiglioni,Ditali,Elicoidali,Farfalline,Fusilli lunghi,Gramigna,Lanterne,Mezzi rigatoni,Occhi di lupo,Orecchie,Passatelli,Pennette,Pennoni,Pici,Puntine,Riccioli,Sagne,Strangozzi,Tortellacci,Vesuvio,Ziti tagliati,Fiori,Gigli,Cencioni,Ferretti,Spätzle/Spaetzle,Spatzle,Tortelli,Sorpresine,Funghini,Anellini,Mafaldine,Bavette,Fedelini,Ciriole,Lagane,Mezzanelli,Scarpinocc`},
+
+{p:"A herb or spice", s:"Herb or spice", a:`Allspice,Anise/Aniseed,Star anise,Asafoetida,Basil,Bay leaf/Bay,Black pepper/Pepper/Peppercorn,Borage,Caraway,Cardamom,Cayenne,Celery seed,Chervil,Chilli powder/Chili powder,Chives,Coriander/Cilantro,Cinnamon,Cloves/Clove,Cumin,Curry leaf,Dill,Epazote,Fennel/Fennel seed,Fenugreek,Galangal,Garlic,Ginger,Horseradish,Hyssop,Juniper/Juniper berry,Lavender,Lemongrass,Lemon balm,Lovage,Mace,Marjoram,Mint,Peppermint,Spearmint,Mustard/Mustard seed,Nigella,Nutmeg,Oregano,Paprika,Smoked paprika,Parsley,Rosemary,Saffron,Sage,Savory,Sorrel,Sumac,Tarragon,Thyme,Turmeric,Vanilla,Wasabi,Za'atar/Zaatar,Ajwain,Amchur/Amchoor,Angelica,Annatto,Chamomile,Chicory,Garam masala,Ras el hanout,Five spice,Herbes de Provence,Mahlab,Sassafras,File,Grains of paradise,Long pepper,Pink peppercorn,Sichuan pepper/Szechuan pepper,Makrut lime leaf/Kaffir lime leaf/Lime leaf,Pandan,Shiso/Perilla,Culantro,Rue,Tansy,Woodruff,Yarrow,Mugwort,Catnip,Lemon verbena,Bergamot,Stevia,Liquorice/Licorice,Black cardamom,Kokum,Tamarind,Cassia,Celery salt,Garlic powder,Onion powder,Curry powder,Chipotle,Ancho,Aleppo pepper,Urfa biber,Kashmiri chilli,Piri piri/Peri peri,Jerk seasoning,Berbere,Dukkah,Baharat,Advieh,Panch phoron,Shichimi togarashi/Togarashi,Gochugaru,Mitmita,Harissa,Quatre epices,Cajun seasoning,Old Bay,Poppy seed,Sesame/Sesame seed,Fenugreek,Black salt/Kala namak,Asafetida,Cubeb,Galangal,Grains of selim,Mastic,Nasturtium,Lemon thyme,Thai basil,Holy basil/Tulsi,Vietnamese coriander,Rau ram,Winter savory,Summer savory,Sweet cicely,Salad burnet,Fennel pollen,Saffron,Juniper,Zedoary,Kencur,Fingerroot`},
+
+{p:"A gemstone or mineral", s:"Gem or mineral", a:`Agate,Alexandrite,Amber,Amethyst,Aquamarine,Aventurine,Azurite,Beryl,Bloodstone,Calcite,Carnelian,Chalcedony,Chrysoberyl,Chrysoprase,Citrine,Coral,Diamond,Emerald,Feldspar,Fluorite,Garnet,Hematite/Haematite,Jade,Jasper,Jet,Kunzite,Kyanite,Labradorite,Lapis lazuli/Lapis,Malachite,Moonstone,Morganite,Obsidian,Onyx,Opal,Pearl,Peridot,Pyrite/Fool's gold,Quartz,Rose quartz,Smoky quartz,Rhodochrosite,Ruby,Sapphire,Sardonyx,Serpentine,Sodalite,Spinel,Sunstone,Tanzanite,Tiger's eye/Tiger eye,Topaz,Tourmaline,Turquoise,Zircon,Zoisite,Iolite,Howlite,Hiddenite,Jadeite,Nephrite,Larimar,Sugilite,Charoite,Benitoite,Painite,Taaffeite,Grandidierite,Tsavorite,Demantoid,Andalusite,Apatite,Axinite,Danburite,Diopside,Dioptase,Enstatite,Euclase,Fire opal,Goshenite,Heliodor,Vesuvianite/Idocrase,Prehnite,Rhodonite,Scapolite,Titanite/Sphene,Staurolite,Unakite,Variscite,Aragonite,Celestite/Celestine,Selenite,Gypsum,Talc,Mica,Magnetite,Galena,Cinnabar,Bauxite,Dolomite,Halite/Rock salt,Barite,Cassiterite,Chalcopyrite,Cuprite,Corundum,Orthoclase,Olivine,Pyroxene,Amphibole,Hornblende,Muscovite,Biotite,Zeolite,Wulfenite,Vanadinite,Smithsonite,Rhodolite,Spessartite,Almandine,Pyrope,Grossular,Uvarovite,Kornerupine,Jeremejevite,Musgravite,Poudretteite,Red beryl/Bixbite,Ammolite,Chrysocolla,Moldavite,Fluorspar,Graphite,Sulphur/Sulfur,Gold,Silver,Copper,Platinum,Lazurite,Lepidolite,Mookaite,Ocean jasper,Pietersite,Sphalerite,Stibnite,Topazolite,Wollastonite,Xonotlite,Zincite,Jacinth,Hyacinth,Marcasite,Moss agate,Onyx,Peridot,Rutile,Rutilated quartz,Anatase,Brookite,Calaverite,Sylvanite,Kernite,Borax,Colemanite,Ulexite,Zoisite,Benitoite,Jet`},
+
+{p:"A language", s:"Language", a:`Afrikaans,Albanian,Amharic,Arabic,Armenian,Azerbaijani/Azeri,Basque,Belarusian,Bengali/Bangla,Bosnian,Breton,Bulgarian,Burmese,Cantonese,Catalan,Cebuano,Cherokee,Chinese,Cornish,Corsican,Croatian,Czech,Danish,Dutch,English,Esperanto,Estonian,Faroese,Persian/Farsi,Fijian,Filipino/Tagalog,Finnish,Flemish,French,Frisian,Scottish Gaelic/Gaelic,Galician,Georgian,German,Greek,Greenlandic,Guarani,Gujarati,Haitian Creole/Creole,Hausa,Hawaiian,Hebrew,Hindi,Hmong,Hungarian,Icelandic,Igbo,Indonesian,Inuktitut,Irish/Irish Gaelic,Italian,Japanese,Javanese,Kannada,Kazakh,Khmer,Kinyarwanda,Korean,Kurdish,Kyrgyz,Lao,Latin,Latvian,Lingala,Lithuanian,Luxembourgish,Macedonian,Malagasy,Malay,Malayalam,Maltese,Mandarin,Manx,Maori,Marathi,Mongolian,Nahuatl,Navajo,Nepali,Norwegian,Occitan,Odia/Oriya,Oromo,Pashto,Polish,Portuguese,Punjabi,Quechua,Romanian,Romansh,Russian,Sami,Samoan,Sanskrit,Serbian,Sesotho/Sotho,Shona,Sindhi,Sinhala/Sinhalese,Slovak,Slovenian/Slovene,Somali,Spanish,Swahili,Swedish,Tahitian,Tajik,Tamil,Tatar,Telugu,Thai,Tibetan,Tigrinya,Tongan,Tswana/Setswana,Turkish,Turkmen,Ukrainian,Urdu,Uyghur,Uzbek,Vietnamese,Welsh,Wolof,Xhosa,Yiddish,Yoruba,Zulu,Ainu,Aramaic,Akkadian,Coptic,Sumerian,Hittite,Etruscan,Tok Pisin,Bislama,Chamorro,Tetum,Dzongkha,Kanuri,Fula/Fulani,Twi/Akan,Ewe,Bambara,Kikuyu,Luganda,Chichewa,Bemba,Ndebele,Venda,Tsonga,Swati,Sango,Kirundi,Assamese,Konkani,Kashmiri,Maithili,Bhojpuri,Dari,Balochi,Ossetian,Chechen,Avar,Chuvash,Bashkir,Yakut,Kalmyk,Karelian,Ladino,Romani,Scots,Yupik,Ojibwe,Cree,Lakota,Mohawk,Hopi,Zapotec,Mixtec,Yucatec Maya/Maya,Aymara,Mapudungun,Papiamento,Marshallese,Palauan,Niuean,Tuvaluan,Nauruan,Zhuang,Wu,Hakka,Hokkien,Teochew,Shanghainese,Sardinian,Sicilian,Neapolitan,Venetian,Friulian,Ladin,Walloon,Picard,Alsatian,Low German/Plattdeutsch,Sorbian,Kashubian,Rusyn,Belarusian,Old English,Old Norse,Gothic,Ancient Greek,Pali,Prakrit,Tocharian,Avestan,Ge'ez,Phoenician,Ugaritic,Elamite,Hurrian,Zazaki,Gagauz,Karakalpak,Uighur,Komi,Udmurt,Mari,Mordvin,Erzya,Moksha,Inupiaq,Tlingit,Haida,Quileute,Zuni,Kiowa,Comanche,Shoshone,Choctaw,Chickasaw,Seminole,Creek/Muscogee,Kalaallisut,Tsakonian,Aromanian,Istro-Romanian`},
+
+{p:"A part of the body", s:"Body part", a:`Ankle,Arm,Armpit,Back,Belly,Bladder,Brain,Calf,Cheek,Chest,Chin,Collarbone/Clavicle,Ear,Elbow,Eye,Eyebrow,Eyelash,Eyelid,Face,Finger,Fingernail/Nail,Foot/Feet,Forearm,Forehead,Gallbladder,Gum,Hair,Hand,Head,Heart,Heel,Hip,Intestine/Gut,Jaw,Kidney,Knee,Kneecap/Patella,Knuckle,Larynx/Voice box,Leg,Lip,Liver,Lung,Mouth,Navel/Belly button,Neck,Nose,Nostril,Palm,Pancreas,Pelvis,Rib,Shin,Shoulder,Skin,Skull,Spine/Backbone,Spleen,Stomach,Temple,Thigh,Throat,Thumb,Toe,Toenail,Tongue,Tooth/Teeth,Torso,Waist,Wrist,Abdomen,Adenoid,Appendix,Aorta,Artery,Vein,Capillary,Cornea,Retina,Iris,Pupil,Lens,Cochlea,Eardrum,Uvula,Tonsil,Epiglottis,Oesophagus/Esophagus/Gullet,Trachea/Windpipe,Bronchus/Bronchi,Diaphragm,Duodenum,Colon,Thyroid,Thymus,Pituitary,Hypothalamus,Cerebellum,Cerebrum,Cortex,Hippocampus,Amygdala,Medulla,Spinal cord,Femur,Tibia,Fibula,Humerus,Radius,Ulna,Scapula/Shoulder blade,Sternum/Breastbone,Vertebra,Coccyx/Tailbone,Sacrum,Ilium,Mandible,Maxilla,Cranium,Phalanges/Phalanx,Metacarpal,Metatarsal,Carpal,Tarsal,Talus,Calcaneus,Hamstring,Quadriceps/Quads,Biceps,Triceps,Deltoid,Pectoral/Pecs,Abdominals/Abs,Gluteus/Glutes,Trapezius/Traps,Latissimus/Lats,Achilles tendon/Achilles,Tendon,Ligament,Cartilage,Muscle,Bone,Bone marrow/Marrow,Nerve,Sinus,Septum,Earlobe,Cuticle,Scalp,Nape,Jugular,Adam's apple,Instep,Sole,Arch,Palate,Molar,Incisor,Canine,Premolar,Wisdom tooth,Enamel,Dentine/Dentin,Ventricle,Atrium,Valve,Alveolus/Alveoli,Nephron,Ureter,Urethra,Ovary,Uterus/Womb,Eustachian tube,Stapes,Incus,Malleus,Hyoid,Philtrum,Lunula,Pharynx,Appendix,Bicep,Calves,Cervix,Sideburn,Fontanelle,Zygoma/Cheekbone,Xiphoid process/Xiphoid,Thorax,Lumbar,Groin,Buttock/Bottom,Hamstring,Hypodermis,Epidermis,Dermis,Follicle,Pore,Gland,Lymph node,Liver,Islet,Plasma,Blood,Synapse,Neuron,Axon,Dendrite`},
+
+{p:"A kitchen utensil or gadget", s:"Kitchen gadget", a:`Baster,Blender,Bottle opener,Bowl,Bread knife,Butter knife,Can opener/Tin opener,Grater/Cheese grater,Chopping board/Cutting board,Chopsticks,Cleaver,Colander,Corkscrew,Cup,Dish rack,Dishwasher,Fork,Freezer,Fridge/Refrigerator,Frying pan/Skillet,Funnel,Garlic press,Glass,Griddle,Kettle,Knife,Ladle,Lid,Mandoline/Mandolin,Masher/Potato masher,Measuring cup,Measuring spoon,Microwave,Mixer/Stand mixer/Hand mixer,Mixing bowl,Mortar,Pestle,Mortar and pestle,Mug,Nutcracker,Oven,Oven glove/Oven mitt,Pan,Peeler,Pepper mill/Pepper grinder,Jug/Pitcher,Plate,Pot,Rolling pin,Saucepan,Scales/Scale,Scissors,Sieve/Strainer,Sink,Spatula,Spoon,Steamer,Hob/Stove/Cooktop,Teapot,Teaspoon,Tablespoon,Thermometer,Timer,Toaster,Tongs,Tray,Trivet,Whisk,Wok,Zester,Cafetiere/French press,Percolator,Juicer,Food processor,Slow cooker/Crockpot,Pressure cooker,Rice cooker,Air fryer,Waffle iron/Waffle maker,Sandwich maker/Toastie maker,Bread maker,Ramekin,Casserole dish/Casserole,Dutch oven,Tagine,Paella pan,Crepe pan,Roasting tin/Roasting pan,Baking tray/Baking sheet,Muffin tin,Cake tin,Loaf tin,Pie dish,Cooling rack,Pastry brush,Piping bag,Cookie cutter/Biscuit cutter,Sifter,Bench scraper/Scraper,Dough hook,Egg timer,Egg slicer,Egg cup,Melon baller,Ice cream scoop/Scoop,Ice cube tray,Salad spinner,Carafe,Decanter,Cruet,Gravy boat,Butter dish,Sugar bowl,Salt shaker/Saltshaker,Napkin,Placemat,Coaster,Tablecloth,Cutlery,Kitchen roll/Paper towel,Cling film/Plastic wrap,Foil/Tinfoil/Aluminium foil,Baking paper/Parchment,Mezzaluna,Santoku,Paring knife,Kitchen shears,Skewer,Rotisserie,Bain-marie,Double boiler,Fondue pot/Fondue set,Smoker,Barbecue/Grill/BBQ,Blowtorch,Spiralizer,Microplane,Apple corer/Corer,Pizza cutter/Pizza wheel,Pizza stone,Pizza peel,Bread bin,Cake stand,Extractor fan/Extractor hood/Range hood,Sous vide,Thermos/Flask,Lemon squeezer/Citrus press,Splatter guard,Meat tenderiser/Meat tenderizer/Meat mallet,Jar,Jam jar,Kilner jar/Mason jar,Ladle,Slotted spoon,Wooden spoon,Fish slice,Turner,Basting brush,Cheese knife,Cheese slicer,Pastry cutter,Dough scraper,Knife block,Knife sharpener/Sharpener/Whetstone,Honing steel,Measuring jug,Weighing scales,Oven tray,Grill pan,Stockpot,Saute pan,Sauteuse,Wok spatula,Spider,Mouli/Food mill,Ricer/Potato ricer,Tamis,Chinois,Muddler,Cocktail shaker,Jigger,Bottle stopper,Wine cooler,Ice bucket,Egg whisk,Balloon whisk,Spurtle,Tortilla press,Pasta maker/Pasta machine,Ravioli cutter,Gnocchi board,Mandoline slicer,Vegetable peeler,Julienne peeler,Herb scissors,Herb stripper,Salt pig,Spice grinder,Coffee grinder,Coffee machine/Espresso machine,Moka pot,Milk frother,Toaster oven,Kettle,Dehydrator,Popcorn maker,Yogurt maker,Ice cream maker,Soda maker,Water filter,Breadboard,Trivet,Quiche dish,Flan dish,Tart tin,Springform tin/Springform pan,Bundt tin/Bundt pan,Madeleine tin,Souffle dish,Terrine,Gratin dish,Zester`},
+
+{p:"An item of clothing", s:"Clothing", a:`Anorak,Apron,Balaclava,Bandana,Beanie,Belt,Beret,Bikini,Blazer,Blouse,Boa,Bodysuit,Bomber jacket/Bomber,Bonnet,Boots/Boot,Bow tie,Bowler hat/Bowler,Boxers,Bra,Braces/Suspenders,Briefs,Cagoule,Camisole,Cap,Cape,Capri pants/Capris,Cardigan,Cargo pants/Cargo trousers/Cargos,Chinos,Cloak,Coat,Corset,Cravat,Crop top,Culottes,Cummerbund,Dinner jacket,Dress,Dressing gown,Dungarees/Overalls,Earmuffs,Fedora,Fleece,Flip-flops/Flip-flop,Gilet,Gloves/Glove,Gown,Hat,Headband,Hijab,Hoodie,Jacket,Jeans,Jersey,Jodhpurs,Jumper/Sweater/Pullover,Jumpsuit,Kaftan/Caftan,Kilt,Kimono,Knickers,Leggings,Leotard,Loafers/Loafer,Mackintosh/Mac,Miniskirt,Mittens/Mitten,Moccasins/Moccasin,Nightgown/Nightie/Nightdress,Onesie,Overcoat,Pyjamas/Pajamas/PJs,Panama hat/Panama,Parka,Petticoat,Polo shirt/Polo,Poncho,Raincoat,Robe,Romper/Playsuit,Sandals/Sandal,Sari/Saree,Sarong,Scarf,Shawl,Shirt,Shoes/Shoe,Shorts,Shrug,Skirt,Slacks,Slippers/Slipper,Smock,Trainers/Sneakers/Sneaker,Socks/Sock,Sombrero,Stetson,Stilettos/Stiletto,Stockings,Suit,Sundress,Joggers/Sweatpants/Tracksuit bottoms,Sweatshirt,Swimsuit/Swimming costume/Bathing suit,T-shirt/Tee,Tailcoat,Tank top,Tie/Necktie,Tights,Toga,Top hat,Tracksuit,Trench coat/Trench,Trousers/Pants,Trunks/Swimming trunks,Tunic,Turban,Turtleneck/Polo neck/Roll neck,Tutu,Tuxedo/Tux,Twinset,Underwear,Veil,Vest,Waistcoat,Wellingtons/Wellies/Wellington boots,Windbreaker/Windcheater,Wrap,Yukata,Zoot suit,Abaya,Burqa/Burka,Niqab,Chador,Dashiki,Dhoti,Lungi,Salwar kameez/Shalwar kameez,Kurta,Sherwani,Cheongsam/Qipao,Hanbok,Ao dai,Dirndl,Lederhosen,Serape,Huipil,Guayabera,Muumuu,Barong,Keffiyeh/Kufiya,Fez,Tam o'shanter,Deerstalker,Trilby,Porkpie hat/Pork pie hat,Boater,Cloche,Fascinator,Tiara,Crown,Balmoral,Glengarry,Ushanka,Trapper hat,Bucket hat,Snapback,Visor,Durag,Headscarf,Bandeau,Bralette,Bustier,Garter,Negligee,Chemise,Espadrilles/Espadrille,Brogues/Brogue,Oxfords/Oxford shoes,Derby shoes,Clogs/Clog,Mules,Wedges,Platforms,Court shoes/Pumps,Ballet flats/Flats,Kitten heels,High heels/Heels,Galoshes,Gaiters,Spats,Waders,Zori,Geta,Jandals,Plimsolls,Mukluks,Chelsea boots,Cowboy boots,Ankle boots,Hiking boots,Pinafore,Tabard,Doublet,Jerkin,Codpiece,Ruff,Corsage,Sash,Stole,Pashmina,Wrap dress,Maxi dress,Midi skirt,Pencil skirt,Kilt,Sporran,Plus fours,Knickerbockers,Breeches,Pantaloons,Bloomers,Hot pants,Bermuda shorts,Board shorts,Cycling shorts,Lycra,Wetsuit,Rash vest,Sarong,Housecoat,Bed jacket,Smoking jacket,Morning suit,Frock coat,Duffel coat/Duffle coat,Pea coat/Peacoat,Puffer jacket/Puffer,Body warmer,Gilet,Harrington jacket,Biker jacket,Denim jacket,Shacket,Overshirt,Henley,Hawaiian shirt,Rugby shirt,Football shirt,Jersey,Singlet,Leotard,Unitard,Catsuit,Boilersuit,Coveralls,Scrubs,Lab coat,Cassock,Surplice,Habit,Kippah/Yarmulke,Zucchetto,Mitre/Miter,Biretta,Wimple`},
+
+{p:"A weather or sky word", s:"Weather word", a:`Blizzard,Breeze,Cloud,Cyclone,Drizzle,Drought,Dust storm,Fog,Frost,Gale,Hail,Hailstone,Haze,Heatwave,Hurricane,Ice,Icicle,Lightning,Mist,Monsoon,Rain,Raindrop,Rainbow,Sleet,Smog,Snow,Snowflake,Snowstorm,Squall,Storm,Sunshine/Sun,Thunder,Thunderstorm,Tornado,Twister,Typhoon,Wind,Whirlwind,Downpour,Shower,Flurry,Gust,Humidity,Dew,Hoarfrost,Rime,Graupel,Virga,Derecho,Haboob,Sirocco,Mistral,Chinook,Foehn/Fohn,Bora,Khamsin,Harmattan,Zonda,Williwaw,Waterspout,Dust devil,Microburst,Nor'easter,Whiteout,Sandstorm,Cloudburst,Deluge,Freezing rain,Black ice,Sunshower,Overcast,Cumulus,Stratus,Cirrus,Nimbus,Cumulonimbus,Altostratus,Altocumulus,Cirrostratus,Cirrocumulus,Nimbostratus,Stratocumulus,Mammatus,Lenticular cloud,Aurora/Northern lights/Aurora borealis/Aurora australis,Halo,Sundog/Parhelion,Moonbow,Fogbow,Mirage,Jet stream,Weather front/Front,Cold front,Warm front,Anticyclone,Depression,El Nino,La Nina,Zephyr,Petrichor,Thaw,Drift/Snowdrift,Slush,Puddle,Flood,Flash flood,Dust,Ozone,Ultraviolet/UV,Temperature,Barometer,Isobar,Forecast,Climate,Atmosphere,Troposphere,Stratosphere,Mesosphere,Thermosphere,Exosphere,Heat haze,Sunset,Sunrise,Dawn,Dusk,Twilight,Gloaming,Moonlight,Starlight,Star,Comet,Meteor shower/Meteor,Shooting star,Eclipse,Solstice,Equinox,Cloudy,Sunny,Rainy,Windy,Snowy,Foggy,Misty,Stormy,Frosty,Icy,Muggy,Humid,Balmy,Chilly,Freezing,Scorcher,Polar vortex,Bomb cyclone,Supercell,Wall cloud,Funnel cloud,Gustnado,Firenado,Hailstorm,Ice storm,Thundersnow,Diamond dust,Brume,Fret/Haar,Pea souper,Squall line,Trade winds,Doldrums,Roaring forties,Westerlies,Easterlies,Katabatic wind,Sea breeze,Land breeze,Willy-willy,Kona storm,Pampero,Levanter,Tramontane,Bise,Etesian/Meltemi,Simoom,Shamal,Brickfielder,Southerly buster,Berg wind,Elephanta,Sukhovey,Buran,Purga,Crachin,Snowpack,Permafrost,Glaze,Verglas,Sun pillar,Light pillar,Crepuscular rays,Anticrepuscular rays,Noctilucent clouds,Nacreous clouds,Iridescence,Glory,Corona,Green flash,Zodiacal light,Gegenschein,Airglow,Sprite,Ball lightning,Sheet lightning,Fork lightning,Heat lightning,Thunderclap,Rumble,Squall`},
+
+{p:"A dessert or sweet treat", s:"Dessert", a:`Apple pie,Baklava,Banoffee pie/Banoffee,Brownie,Cannoli,Cheesecake,Churros/Churro,Cobbler,Creme brulee,Crumble,Cupcake,Custard,Doughnut/Donut,Eclair,Flan,Fudge,Gelato,Ice cream,Jelly/Jello,Key lime pie,Lemon tart,Macaron,Macaroon,Meringue,Mousse,Panna cotta,Pavlova,Profiterole,Pudding,Rice pudding,Sorbet,Souffle,Sponge cake/Sponge,Strudel,Sundae,Tiramisu,Trifle,Tart,Waffle,Pancake,Crepe,Mochi,Kulfi,Gulab jamun,Jalebi,Halva/Halwa,Turkish delight/Lokum,Knafeh/Kunafa,Basbousa,Bread and butter pudding,Bread pudding,Spotted dick,Sticky toffee pudding,Eton mess,Bakewell tart,Battenberg,Jam roly-poly,Treacle tart,Syllabub,Fool,Posset,Cranachan,Millionaire's shortbread,Shortbread,Flapjack,Scone,Madeleine,Financier,Clafoutis,Tarte tatin,Mille-feuille,Opera cake,Paris-Brest,Croquembouche,Choux bun,Beignet,Zeppole,Sfogliatella,Panettone,Zabaglione,Affogato,Semifreddo,Granita,Cassata,Sachertorte,Linzer torte,Black Forest gateau/Black Forest cake,Apfelstrudel,Kaiserschmarrn,Stollen,Lebkuchen,Pastel de nata/Pasteis de nata,Alfajor,Dulce de leche,Tres leches,Brigadeiro,Quindim,Arroz con leche,Natillas,Crema catalana,Torrijas,Bunuelo,Sopapilla,Polvoron,Dango,Dorayaki,Taiyaki,Daifuku,Yokan,Mooncake,Egg tart,Bingsu,Halo-halo,Bibingka,Cendol,Lamington,Anzac biscuit,Blondie,Cookie,Biscuit,Cake,Pie,Buckle,Grunt,Slump,Pandowdy,Whoopie pie,S'mores/S'more,Rocky road,Snickerdoodle,Rugelach,Hamantaschen,Babka,Kugel,Sufganiyah,Galaktoboureko,Loukoumades,Kourabiedes,Melomakarona,Tulumba,Sutlac,Ashure,Kheer,Rasgulla,Ras malai,Barfi,Laddu/Ladoo,Peda,Sandesh,Payasam,Shrikhand,Modak,Brittle,Toffee,Caramel,Nougat,Marzipan,Praline,Truffle,Bonbon,Lollipop,Marshmallow,Candy floss/Cotton candy,Gobstopper,Humbug,Sherbet,Rock,Liquorice,Gummy bear,Jelly bean,Fondant,Ganache,Gingerbread,Parkin,Eccles cake,Chelsea bun,Belgian bun,Iced bun,Rock cake,Fairy cake,Victoria sponge,Swiss roll,Arctic roll,Baked Alaska,Knickerbocker glory,Banana split,Frozen yogurt/Froyo,Popsicle/Ice lolly,Pudding,Blancmange,Junket,Charlotte,Bombe,Zuccotto,Pastiera,Struffoli,Torrone,Panforte,Cantucci/Biscotti,Amaretti,Baci,Bomboloni,Krapfen,Berliner,Kanelbulle/Cinnamon bun/Cinnamon roll,Semla,Prinsesstarta,Kladdkaka,Kringle,Aebleskiver,Krumkake,Pepparkakor,Pierniki,Paczki,Makowiec,Sernik,Kremowka,Dobos torte,Esterhazy torte,Kurtoskalacs/Chimney cake,Medovik,Napoleon,Syrniki,Pashka,Kulich,Ptichye moloko,Trdelnik,Buchty,Kolache,Palacinke,Tufahija,Revani,Kadayif,Lokma,Asure,Maamoul,Qatayef,Umm Ali,Muhallebi,Mahalabia,Sholeh zard,Faloodeh,Zoolbia,Bamieh,Gaz,Sohan,Koeksister,Malva pudding,Melktert,Puff-puff,Chin chin,Mandazi`},
+
+{p:"A unit of measurement", s:"Unit", a:`Acre,Ampere/Amp,Angstrom,Are,Bar,Barrel,Becquerel,Bit,Byte,Kilobyte,Megabyte,Gigabyte,Terabyte,Petabyte,Exabyte,Zettabyte,Yottabyte,Calorie,Kilocalorie,Candela,Carat/Karat,Celsius/Centigrade,Degree,Centimetre/Centimeter,Chain,Coulomb,Cubit,Cup,Day,Decibel,Dram,Dyne,Erg,Fahrenheit,Farad,Fathom,Foot/Feet,Furlong,Gallon,Gill,Grain,Gram/Gramme,Gray,Hand,Hectare,Henry,Hertz,Kilohertz,Megahertz,Gigahertz,Horsepower,Hour,Hundredweight,Inch,Joule,Kilojoule,Kelvin,Kilogram/Kilo,Kilometre/Kilometer,Kilowatt,Megawatt,Gigawatt,Knot,League,Light year/Lightyear,Litre/Liter,Lumen,Lux,Metre/Meter,Mile,Millimetre/Millimeter,Millilitre/Milliliter,Centilitre/Centiliter,Decilitre,Minute,Mole,Nautical mile,Newton,Ohm,Ounce,Parsec,Pascal,Hectopascal,Peck,Pennyweight,Pica,Pint,Point,Pound,Quart,Radian,Rod,Second,Siemens,Sievert,Slug,Steradian,Stone,Tablespoon,Teaspoon,Tesla,Therm,Ton,Tonne,Torr,Troy ounce,Volt,Watt,Weber,Week,Yard,Year,Decade,Century,Millennium,Fortnight,Nanometre/Nanometer,Micron/Micrometre/Micrometer,Nanosecond,Millisecond,Microsecond,Picosecond,Femtosecond,Kiloton,Megaton,Astronomical unit,Bushel,Hogshead,Firkin,Kilderkin,Scruple,Minim,Drachm,Span,Ell,Rood,Perch,Pole,Link,Mil,Thou,Barleycorn,Smoot,Jiffy,Mach,Baud,Millibar,Atmosphere,Gauss,Maxwell,Oersted,Debye,Rem,Rad,Roentgen,Curie,Rutherford,Katal,Lambert,Phot,Stilb,Poise,Stokes,Dalton,Barn,Shake,Sverdrup,Jansky,Cord,Quire,Ream,Gross,Dozen,Baker's dozen,Score,Fluid ounce,Cubic metre/Cubic meter,Square metre/Square meter,Square mile,Square foot,Cubic foot,Watt-hour/Watt hour,Kilowatt-hour/Kilowatt hour,Ampere-hour/Amp hour,Volt-ampere,Electronvolt/Electron volt,Hartree,Planck length,Planck time,Megaparsec,Kiloparsec,Zeptosecond,Yoctosecond,Attosecond,Zettametre,Yottametre,Kibibyte,Mebibyte,Gibibyte,Nibble,Word,Megapixel,Pixel,Em,En,Twip,Pica,Agate,Cicero,Didot,Hand,Finger,Palm,Digit,Cable,Fathom,Shackle,League,Verst,Arshin,Li,Jin,Tael,Catty,Picul,Koku,Shaku,Sun,Tsubo,Tatami,Bigha,Lakh,Crore,Tola,Seer,Maund,Chaldron,Tun,Pipe,Puncheon,Jeroboam,Magnum,Rehoboam,Methuselah,Salmanazar,Balthazar,Nebuchadnezzar,Melchizedek,Kip,Sthene,Pieze,Statcoulomb,Abampere,Biot,Franklin,Gilbert,Langley,Darcy,Kayser,Rayl,Sabin,Sone,Phon,Mel,Bark,Savart,Octave,Cent,Neper,Bel`},
+
+{p:"A kind of tree", s:"Tree", a:`Acacia,Alder,Almond,Apple,Ash,Aspen,Baobab,Balsa,Banyan,Beech,Birch,Box/Boxwood,Buckeye,Cedar,Cherry,Chestnut/Sweet chestnut,Cottonwood,Cypress,Dogwood,Ebony,Elder,Elm,Eucalyptus/Gum tree,Fig,Fir,Ginkgo,Hawthorn,Hazel,Hemlock,Hickory,Holly,Hornbeam,Horse chestnut,Juniper,Kapok,Larch,Laurel,Lime/Linden,Locust,Magnolia,Mahogany,Mango,Maple,Monkey puzzle,Mulberry,Myrtle,Oak,Olive,Orange,Palm,Pear,Pecan,Pine,Plane/London plane,Plum,Poplar,Redwood,Rowan/Mountain ash,Sassafras,Sequoia,Spruce,Sycamore,Tamarind,Teak,Tulip tree,Walnut,Willow,Weeping willow,Yew,Jacaranda,Jarrah,Karri,Kauri,Totara,Rimu,Pohutukawa,Kowhai,Wattle,Mallee,Coolibah,Boab,Bunya,Moreton Bay fig,Joshua tree,Quaking aspen,Quince,Zelkova,Katsura,Jujube,Cork oak,Holm oak,Sweetgum,Tupelo,Catalpa,Paulownia,Hackberry,Ironwood,Buttonwood,Mangrove,Sumac,Persimmon,Pawpaw,Osage orange,Cucumber tree,Yellowwood,Basswood,Butternut,Sourwood,Mesquite,Palo verde,Dragon tree/Dragon blood tree,Frankincense,Myrrh,Sandalwood,Rosewood,Cocobolo,Wenge,Zebrawood,Lignum vitae,Purpleheart,Bubinga,Padauk,Iroko,Sapele,Obeche,Okoume,Merbau,Meranti,Rubber tree,Cinchona,Neem,Peepal/Bodhi tree/Sacred fig,Sal,Deodar,Chinar,Arjun,Ashoka,Gulmohar/Flame tree,Araucaria,Podocarp,Cryptomeria/Japanese cedar,Dawn redwood/Metasequoia,Wollemi pine,Bristlecone pine,Douglas fir,Scots pine,Stone pine,Aleppo pine,Cedar of Lebanon,Atlas cedar,Western red cedar,Tamarack,Silver birch,Copper beech,Black poplar,Lombardy poplar,Field maple,Norway maple,Sugar maple,Red maple,Japanese maple,Wild service tree/Service tree,Whitebeam,Crab apple/Crabapple,Blackthorn,Spindle,Guelder rose,Buckthorn,Alder buckthorn,Wych elm,English oak,Sessile oak,Turkey oak,Red oak,Live oak,Bur oak,Cork tree,Carob,Pistachio,Cashew,Macadamia,Brazil nut,Cacao,Coffee,Clove,Nutmeg,Avocado,Breadfruit,Jackfruit,Durian,Lychee,Guava,Papaya,Banana,Coconut palm,Date palm,Oil palm,Sago palm,Raffia palm,Royal palm,Fan palm,Cabbage palm,Bottle tree,Quiver tree,Umbrella thorn,Sausage tree,Marula,Mopane/Mopani,Yellowwood,Stinkwood,Kiaat,Leadwood,Fever tree,Jackalberry,Ziziphus,Zapote,Xylosma`},
+
+{p:"A flower", s:"Flower", a:`Allium,Alstroemeria,Amaryllis,Anemone,Aster,Azalea,Begonia,Bluebell,Bougainvillea,Buttercup,Camellia,Carnation,Chrysanthemum/Mum,Clematis,Clover,Columbine,Cornflower,Cosmos,Crocus,Cyclamen,Daffodil,Dahlia,Daisy,Dandelion,Delphinium,Edelweiss,Forget-me-not,Foxglove,Freesia,Fuchsia,Gardenia,Geranium,Gerbera,Gladiolus/Gladioli,Hibiscus,Hollyhock,Honeysuckle,Hyacinth,Hydrangea,Iris,Jasmine,Jonquil,Lavender,Lilac,Lily,Lily of the valley,Lotus,Lupin/Lupine,Magnolia,Marigold,Morning glory,Narcissus,Nasturtium,Orchid,Pansy,Peony,Periwinkle,Petunia,Phlox,Poinsettia,Poppy,Primrose,Protea,Ranunculus,Rhododendron,Rose,Snapdragon,Snowdrop,Sunflower,Sweet pea,Thistle,Tulip,Verbena,Violet,Wallflower,Water lily/Waterlily,Wisteria,Zinnia,Yarrow,Aconite/Monkshood/Wolfsbane,Agapanthus,Ageratum,Alyssum,Anthurium,Aquilegia,Calla lily/Arum lily/Calla,Astilbe,Bird of paradise/Strelitzia,Bleeding heart,Bloodroot,Borage,Bottlebrush,Calendula,Campanula/Bellflower,Canna,Celosia,Clivia,Coreopsis,Cowslip,Crocosmia,Daphne,Dianthus,Echinacea/Coneflower,Lisianthus/Eustoma,Frangipani/Plumeria,Gaillardia,Gazania,Gentian,Gypsophila/Baby's breath,Heather,Heliotrope,Hellebore,Hepatica,Impatiens/Busy lizzie,Ixia,Kalanchoe,Kangaroo paw,Larkspur,Liatris,Lobelia,Love-in-a-mist/Nigella,Mallow,Marguerite,Oleander,Oxalis,Passionflower/Passion flower,Pelargonium,Penstemon,Phalaenopsis/Moth orchid,Plumbago,Polyanthus,Portulaca,Pasqueflower/Pulsatilla,Rudbeckia/Black-eyed Susan,Salvia,Saxifrage,Scabious,Sedum,Statice,Stephanotis,Stock,Sweet William,Tansy,Trillium,Tuberose,Valerian,Veronica,Viburnum,Vinca,Viola,Waratah,Xeranthemum,Zantedeschia,Camas/Quamash,Red hot poker/Kniphofia,Rain lily/Zephyranthes,Globe amaranth/Gomphrena,Amaranth,Hoya,Primula,Anemone,Cineraria,Gloxinia,African violet,Cherry blossom/Sakura,Orange blossom,Apple blossom,Elderflower,Chamomile,Feverfew,Oxeye daisy,Shasta daisy,Michaelmas daisy,Bachelor's button,Cornflower,Ragged robin,Red campion,Sea thrift/Thrift,Harebell,Speedwell,Celandine,Wood anemone,Wild garlic/Ramsons,Meadowsweet,Cow parsley,Rosebay willowherb/Fireweed,Ox-eye,Teasel,Knapweed,Vetch,Bird's-foot trefoil,Toadflax,Herb Robert,Cranesbill,Sea holly/Eryngium,Echium,Kalmia,Kerria,Jessamine,Quisqualis,Zygopetalum`},
+
+{p:"A fish", s:"Fish", a:`Anchovy,Angelfish,Barracuda,Bass/Sea bass,Betta/Siamese fighting fish,Bream,Brill,Carp,Catfish,Char/Arctic char,Chub,Cichlid,Clownfish,Cod,Coelacanth,Dab,Dace,Eel,Flounder,Goby,Goldfish,Grayling,Grouper,Guppy,Gudgeon,Haddock,Hake,Halibut,Herring,John Dory/Dory,Koi,Lamprey,Ling,Lionfish,Mackerel,Mahi-mahi/Dorado,Marlin,Minnow,Monkfish,Moray/Moray eel,Mullet,Perch,Pike,Piranha,Plaice,Pollock/Pollack,Pufferfish/Puffer/Blowfish/Fugu,Ray,Manta ray/Manta,Stingray,Roach,Rudd,Salmon,Sardine,Pilchard,Sawfish,Shark,Skate,Snapper,Sole,Sprat,Sturgeon,Sunfish/Mola,Swordfish,Tarpon,Tench,Tetra,Tilapia,Trout,Tuna,Turbot,Wahoo,Whitebait,Whiting,Wrasse,Zander,Barbel,Bleak,Blenny,Bluefin tuna/Bluefin,Bonito,Butterfish,Capelin,Cobia,Croaker,Dogfish,Drum,Eelpout,Gar/Garfish,Gurnard,Hagfish,Hammerhead,Icefish,Kingfish,Lumpfish/Lumpsucker,Mako,Mudskipper,Needlefish,Oarfish,Opah,Paddlefish,Parrotfish,Pompano,Porgy,Rockfish,Sablefish,Sailfish,Scorpionfish,Seahorse,Shad,Smelt,Snook,Stickleback,Stonefish,Surgeonfish/Tang,Tigerfish,Triggerfish,Wels catfish,Walleye,Weever,Wolffish,Yellowtail,Zebrafish,Arapaima,Arowana,Bichir,Discus,Gourami,Loach,Molly,Oscar,Platy,Pleco/Plecostomus,Rasbora,Swordtail,Danio,Killifish,Bowfin,Muskellunge/Muskie,Sauger,Crappie,Bluegill,Pumpkinseed,Sculpin,Cusk,Tilefish,Hoki,Barramundi,Murray cod,Kahawai,Trevally,Queenfish,Coral trout,Sweetlips,Fusilier,Damselfish,Anthias,Hogfish,Jawfish,Quillback,Sheepshead,Spadefish,Frogfish,Anglerfish,Viperfish,Lanternfish,Hatchetfish,Gulper eel,Dragonfish,Barreleye,Fangtooth,Blobfish,Skipjack,Albacore,Yellowfin,Bigeye,Great white shark/Great white,Whale shark,Basking shark,Tiger shark,Bull shark,Nurse shark,Thresher shark,Wobbegong,Goblin shark,Megamouth,Greenland shark,Sea lamprey,Rainbow trout,Brown trout,Sea trout,Coho,Chinook,Sockeye,Pink salmon,Chum,Steelhead,Grayling,Whitefish,Vendace,Powan,Pollan,Burbot,Hoki,Pangasius/Basa,Swai,Snakehead,Tiger barb,Neon tetra,Cardinal tetra,Corydoras,Ide,Orfe,Asp,Nase,Vimba,Zope,Ruffe,Zingel,Jack,Amberjack,Yellowjack,Queen triggerfish,Quillfish,Javelin fish,Kob,Kingklip,Snoek,Galjoen,Musselcracker,Yellowtail kingfish`},
+
+{p:"An insect", s:"Insect", a:`Ant,Aphid,Bee,Beetle,Bumblebee,Butterfly,Caterpillar,Cicada,Cockroach/Roach,Cricket,Damselfly,Dragonfly,Earwig,Firefly/Lightning bug,Flea,Fly,Gnat,Grasshopper,Hornet,Housefly,Ladybird/Ladybug,Locust,Louse/Lice,Mantis/Praying mantis,Mayfly,Midge,Mosquito,Moth,Silverfish,Stick insect,Termite,Wasp,Weevil,Yellowjacket/Yellow jacket,Bedbug,Bluebottle,Horsefly,Hoverfly,Crane fly/Daddy longlegs,Lacewing,Leafhopper,Mealybug,Scarab,Stag beetle,Dung beetle,Click beetle,Firebug,Shield bug/Stink bug,Water boatman,Pond skater/Water strider,Backswimmer,Caddisfly,Stonefly,Scorpionfly,Snakefly,Alderfly,Antlion,Katydid,Cockchafer/Maybug,Glow-worm/Glowworm,Bark beetle,Deathwatch beetle,Woodworm,Mealworm,Silkworm,Thrips,Whitefly,Sawfly,Botfly,Tsetse fly/Tsetse,Sandfly,Blackfly,Greenfly,Fruit fly,Robber fly,Bee fly,Honeybee,Carpenter bee,Mason bee,Leafcutter ant,Leafcutter bee,Army ant,Bullet ant,Fire ant,Velvet ant,Cuckoo wasp,Ichneumon,Tarantula hawk,June bug,Japanese beetle,Colorado beetle,Jewel beetle,Goliath beetle,Hercules beetle,Rhinoceros beetle,Rove beetle,Ground beetle,Tiger beetle,Diving beetle,Whirligig beetle,Lanternfly/Lantern fly,Treehopper,Froghopper/Spittlebug,Psyllid,Scale insect,Cochineal,Leaf insect,Hissing cockroach,Mole cricket,Cave cricket,Weta,Camel cricket,Firebrat,Springtail,Bristletail,Booklouse,Mantisfly,Owlfly,Dobsonfly,Hellgrammite,Grub,Maggot,Larva,Monarch,Swallowtail,Cabbage white,Red admiral,Painted lady,Peacock butterfly,Birdwing,Morpho,Skipper,Hawkmoth/Hawk moth,Luna moth,Atlas moth,Death's-head hawkmoth,Tiger moth,Emperor moth,Silk moth,Clothes moth,Spongy moth/Gypsy moth,Fritillary,Comma,Brimstone,Orange tip,Small tortoiseshell,Holly blue,Purple emperor,Hairstreak,Ringlet,Gatekeeper,Meadow brown,Speckled wood,Grayling,Blue morpho,Glasswing,Owl butterfly,Zebra longwing,Queen butterfly,Viceroy,Question mark,Buckeye,Cicada killer,Hornet moth,Bagworm,Inchworm,Looper,Cutworm,Armyworm,Bollworm,Borer,Leafminer,Gall wasp,Fig wasp,Paper wasp,Potter wasp,Mud dauber,Spider wasp,Jewel wasp,Horntail,Wood wasp,Yellow dung fly,Crane fly,Drone fly,Flesh fly,Stable fly,Deer fly,Cleg,Midge,Mosquito,Assassin bug,Kissing bug,Wheel bug,Ambush bug,Squash bug,Chinch bug,Lygus bug,Boxelder bug,Water scorpion,Giant water bug,Toe-biter,Zorapteran,Jumping bristletail,Earwig,Dermestid,Carpet beetle,Larder beetle,Flour beetle,Grain weevil,Boll weevil,Vine weevil,Acorn weevil,Giraffe weevil,Snout beetle,Longhorn beetle,Tortoise beetle,Oil beetle,Blister beetle,Bombardier beetle,Sexton beetle,Burying beetle,Carrion beetle,Soldier beetle,Sailor beetle,Cardinal beetle,Wasp beetle,Violin beetle,Titan beetle,Atlas beetle,Queen bee,Quaker moth,Jezebel butterfly,Jersey tiger,Kentish glory,Zygaena/Burnet moth,Xylocopa`},
+
+{p:"A job", s:"Job", a:`Accountant,Actor/Actress,Actuary,Acupuncturist,Architect,Archivist,Artist,Astronaut,Astronomer,Athlete,Auctioneer,Author,Baker,Banker,Barber,Barista,Bartender/Barman/Barmaid,Beekeeper/Apiarist,Blacksmith,Bodyguard,Bookkeeper,Bricklayer,Builder,Butcher,Butler,Captain,Carpenter,Cartographer,Cashier,Chauffeur,Chef,Chemist,Chiropractor,Choreographer,Cleaner,Clerk,Coach,Cobbler,Composer,Conductor,Cook,Courier,Croupier,Curator,Dancer,Dentist,Designer,Detective,Dietitian/Dietician,Diplomat,Director,Doctor,Driver,Economist,Editor,Electrician,Engineer,Farmer,Firefighter/Fireman,Fisherman,Florist,Gardener,Geologist,Glazier,Goldsmith,Hairdresser,Historian,Illustrator,Interpreter,Janitor,Jeweller/Jeweler,Jockey,Journalist,Judge,Juggler,Lawyer,Lecturer,Librarian,Lifeguard,Locksmith,Lumberjack,Magician,Mason/Stonemason,Mechanic,Midwife,Miner,Model,Musician,Nanny,Navigator,Nurse,Optician,Optometrist,Painter,Paramedic,Pharmacist,Photographer,Physicist,Physiotherapist/Physio,Pilot,Plumber,Poet,Police officer/Policeman/Policewoman,Politician,Porter,Postman/Postwoman/Mail carrier,Potter,Priest,Professor,Programmer,Psychologist,Publisher,Rabbi,Receptionist,Referee,Reporter,Sailor,Salesperson/Salesman/Saleswoman,Scientist,Sculptor,Secretary,Shepherd,Singer,Soldier,Solicitor,Surgeon,Surveyor,Tailor,Teacher,Therapist,Translator,Tutor,Typist,Umpire,Undertaker,Upholsterer,Vet/Veterinarian/Veterinary surgeon,Waiter,Waitress,Weaver,Welder,Writer,Zookeeper,Zoologist,Quartermaster,Quarryman,Quilter,Jester,Jailer/Gaoler,Joiner,Xylophonist,Yoga teacher/Yoga instructor,Cooper,Fletcher,Chandler,Thatcher,Wheelwright,Farrier,Saddler,Tanner,Cutler,Milliner,Haberdasher,Draper,Cartwright,Ostler,Scrivener,Falconer,Gamekeeper,Ghillie,Swineherd,Cowherd,Goatherd,Vintner,Sommelier,Brewer,Distiller,Cheesemonger,Fishmonger,Ironmonger,Greengrocer,Grocer,Newsagent,Stationer,Tobacconist,Pawnbroker,Stockbroker,Broker,Bank teller/Teller,Auditor,Analyst,Consultant,Manager,Entrepreneur,Executive,Administrator,Archaeologist,Anthropologist,Biologist,Botanist,Ecologist,Entomologist,Geneticist,Glaciologist,Hydrologist,Meteorologist,Microbiologist,Mineralogist,Oceanographer,Ornithologist,Palaeontologist/Paleontologist,Pharmacologist,Seismologist,Statistician,Mathematician,Volcanologist,Herpetologist,Ichthyologist,Lexicographer,Linguist,Philosopher,Theologian,Sociologist,Anaesthetist/Anesthesiologist,Cardiologist,Dermatologist,Neurologist,Oncologist,Ophthalmologist,Orthodontist,Paediatrician/Pediatrician,Podiatrist,Psychiatrist,Radiologist,Radiographer,Sonographer,Phlebotomist,Pathologist,Coroner,Embalmer,Mortician,Gravedigger,Chimney sweep/Sweep,Window cleaner,Plasterer,Roofer,Scaffolder,Tiler,Decorator,Landscaper,Arborist/Tree surgeon,Forester,Ranger/Park ranger,Warden,Coastguard,Cosmonaut,Puppeteer,Ventriloquist,Acrobat,Clown,Stuntman/Stunt performer,Mime,Busker,DJ/Disc jockey,Producer,Screenwriter,Playwright,Novelist,Columnist,Critic,Cartoonist,Animator,Copywriter,Blogger,Developer/Software developer/Web developer,Software engineer,Data scientist,Technician,Machinist,Toolmaker,Millwright,Boilermaker,Pipefitter,Shipwright,Rigger,Stevedore/Docker/Longshoreman,Lorry driver/Truck driver/Trucker,Taxi driver/Cabbie,Gondolier,Ferryman,Helmsman,Deckhand,Boatswain/Bosun,Purser,Steward,Stewardess,Flight attendant,Air traffic controller,Dispatcher,Bailiff,Barrister,Paralegal,Notary,Magistrate,Sheriff,Marshal,Constable,Inspector,Sergeant,Spy,Ambassador,Consul,Mayor,Senator,Governor,Minister,Chancellor,Taxidermist,Tattooist/Tattoo artist,Locum,Childminder,Au pair,Governess,Housekeeper,Valet,Concierge,Bellhop,Doorman,Bouncer,Security guard,Lollipop lady/Lollipop man/Crossing guard,Lifeguard,Snake charmer,Lion tamer,Ringmaster,Zookeeper,Jockey,Caddie/Caddy,Groundskeeper/Groundsman,Greenkeeper,Squire,Knight,Herald,Town crier,Lamplighter,Knocker-upper,Rat catcher,Mudlark,Wainwright,Cordwainer,Hatter,Glover,Furrier,Dyer,Fuller,Spinner,Seamstress,Dressmaker,Couturier,Stylist,Makeup artist,Beautician,Manicurist,Masseur/Masseuse,Personal trainer,Physiotherapist,Kinesiologist,Hypnotherapist,Herbalist,Homeopath,Osteopath,Reflexologist,Doula,Paramedic,Pilot,Jet pilot`},
+
+{p:"A cat breed", s:"Cat breed", a:`Abyssinian,American curl,American shorthair,Balinese,Bengal,Birman,Bombay,British shorthair,Burmese,Burmilla,Chartreux,Cornish rex,Devon rex,Egyptian mau,Exotic shorthair/Exotic,Havana brown,Himalayan,Japanese bobtail,Khao manee,Korat,Kurilian bobtail,LaPerm,Maine coon,Manx,Munchkin,Nebelung,Norwegian forest cat/Norwegian forest,Ocicat,Oriental shorthair/Oriental,Persian,Peterbald,Pixie-bob,Ragamuffin,Ragdoll,Russian blue,Savannah,Scottish fold,Selkirk rex,Siamese,Siberian,Singapura,Snowshoe,Somali,Sphynx,Tonkinese,Toyger,Turkish angora,Turkish van,Chausie,Lykoi,Minskin,Serengeti,Sokoke,Highlander,Cymric,Bambino,Elf,Ojos azules,York chocolate,Thai,Aphrodite,Arabian mau,Australian mist,Colorpoint shorthair/Colourpoint shorthair,Javanese,Kinkalow,Napoleon/Minuet,Raas,Safari,Ukrainian levkoy,Ussuri,American bobtail,American wirehair,Asian,Asian semi-longhair,Bohemian rex,Brazilian shorthair,British longhair,California spangled,Chantilly-Tiffany/Tiffany,Cheetoh,Cyprus,Donskoy/Don sphynx,Dragon Li/Li hua,European shorthair,German rex,Kanaani,Kurilian,Mekong bobtail,Nebelung,Oregon rex,Persian,Pixiebob,Scottish straight,Seychellois,Siberian forest cat,Sokoke,Suphalak,Tennessee rex,Toybob,Turkish shorthair,Ural rex,Bengal`},
+
+{p:"A car brand", s:"Car brand", a:`Acura,Alfa Romeo,Aston Martin,Audi,Bentley,BMW,Bugatti,Buick,Cadillac,Chevrolet/Chevy,Chrysler,Citroen,Cupra,Dacia,Daewoo,Daihatsu,Dodge,Ferrari,Fiat,Ford,Genesis,GMC,Honda,Hummer,Hyundai,Infiniti,Jaguar,Jeep,Kia,Koenigsegg,Lada,Lamborghini,Lancia,Land Rover/Range Rover,Lexus,Lincoln,Lotus,Maserati,Maybach,Mazda,McLaren,Mercedes-Benz/Mercedes,MG,Mini,Mitsubishi,Nissan,Opel,Pagani,Peugeot,Polestar,Pontiac,Ram,Renault,Rivian,Rolls-Royce,Saab,SEAT,Skoda,Smart,Subaru,Suzuki,Tata,Tesla,Toyota,Vauxhall,Volkswagen/VW,Volvo,BYD,Nio,Xpeng,Geely,Chery,Great Wall,Haval,Lucid,Fisker,Alpine,Morgan,Caterham,TVR,Ariel,Noble,Rimac,Spyker,Wiesmann,Zagato,De Tomaso,Isuzu,Holden,Proton,Perodua,Mahindra,Maruti/Maruti Suzuki,Scion,Saturn,Plymouth,Oldsmobile,Mercury,Studebaker,Packard,DeLorean,Trabant,Wartburg,Zastava,Yugo,Moskvitch,ZIL,GAZ,UAZ,SsangYong/KGM,Datsun,Triumph,Rover,Austin,Morris,Hillman,Sunbeam,Humber,Riley,Wolseley,Jensen,Reliant,Bristol,Lagonda,Hispano-Suiza,Duesenberg,Cord,Auburn,Hudson,Nash,Kaiser,Tucker,Stutz,Pierce-Arrow,Abarth,Zeekr,Xiaomi,Ora,Wey,Lynk & Co/Lynk,Hongqi,JAC,BAIC,Roewe,Seres,Aito,Leapmotor,Jaecoo,Omoda,Qoros,Vinfast,Togg,Borgward,Artega,Gumpert,Apollo,Donkervoort,Venturi,Bollore,Facel Vega,Matra,Simca,Talbot,Panhard,Delage,Delahaye,Hotchkiss,Ligier,Microcar,Aixam,Tatra,Praga,Polski Fiat,FSO,Dacia,ARO,Moskvich,Volga,Autobianchi,Innocenti,Iso,Bizzarrini,Cisitalia,Lancia,Vector,Saleen,Hennessey,SSC,Shelby,Panoz,Rossion,Mosler,Czinger,Karma,Faraday Future,Canoo,Aptera,Lordstown,Nikola,Scout,International,Willys,AMC,Rambler,Eagle,Geo,Imperial,DeSoto,Edsel,Checker,Hyundai,Genesis,Kia,Daewoo,Samsung,Renault Samsung`},
+
+{p:"A word from the NATO phonetic alphabet", s:"NATO alphabet", a:`Alfa/Alpha,Bravo,Charlie,Delta,Echo,Foxtrot,Golf,Hotel,India,Juliett/Juliet,Kilo,Lima,Mike,November,Oscar,Papa,Quebec,Romeo,Sierra,Tango,Uniform,Victor,Whiskey/Whisky,X-ray/Xray,Yankee,Zulu`},
+
+{p:"A letter of the Greek alphabet", s:"Greek letter", a:`Alpha,Beta,Gamma,Delta,Epsilon,Zeta,Eta,Theta,Iota,Kappa,Lambda,Mu,Nu,Xi,Omicron,Pi,Rho,Sigma,Tau,Upsilon,Phi,Chi,Psi,Omega,Digamma,Stigma,Koppa,Sampi,Heta,San`},
+
+{p:"A dinosaur or prehistoric creature", s:"Dinosaur", a:`Allosaurus,Ankylosaurus,Apatosaurus,Archaeopteryx,Argentinosaurus,Brachiosaurus,Brontosaurus,Carnotaurus,Compsognathus,Deinonychus,Dilophosaurus,Diplodocus,Gallimimus,Giganotosaurus,Iguanodon,Maiasaura,Megalosaurus,Microraptor,Oviraptor,Pachycephalosaurus,Parasaurolophus,Plateosaurus,Protoceratops,Pteranodon,Quetzalcoatlus,Spinosaurus,Stegosaurus,Styracosaurus,Therizinosaurus,Triceratops,Troodon,Tyrannosaurus/Tyrannosaurus rex/T. rex/T-rex,Velociraptor/Raptor,Baryonyx,Coelophysis,Corythosaurus,Edmontosaurus,Euoplocephalus,Herrerasaurus,Hadrosaurus,Kentrosaurus,Lambeosaurus,Mamenchisaurus,Mosasaurus,Ornithomimus,Ouranosaurus,Pachyrhinosaurus,Plesiosaurus/Plesiosaur,Ichthyosaurus/Ichthyosaur,Psittacosaurus,Saltasaurus,Sauropelta,Suchomimus,Utahraptor,Yutyrannus,Zuniceratops,Albertosaurus,Amargasaurus,Ceratosaurus,Cryolophosaurus,Dreadnoughtus,Gigantoraptor,Gorgosaurus,Irritator,Kosmoceratops,Minmi,Nodosaurus,Nigersaurus,Patagotitan,Pentaceratops,Sinosauropteryx,Torosaurus,Tarbosaurus,Titanosaurus,Dimetrodon,Mammoth/Woolly mammoth,Mastodon,Smilodon/Sabre-toothed cat/Saber-toothed tiger/Sabretooth,Megalodon,Dunkleosteus,Trilobite,Ammonite,Megatherium,Glyptodon,Moa,Haast's eagle,Terror bird,Aurochs,Woolly rhinoceros/Woolly rhino,Irish elk/Megaloceros,Gigantopithecus,Archelon,Sarcosuchus,Deinosuchus,Dimorphodon,Rhamphorhynchus,Pterodactyl/Pterodactylus,Elasmosaurus,Liopleurodon,Kronosaurus,Eoraptor,Mussaurus,Xenoceratops,Zuul,Jeholosaurus,Qianzhousaurus,Xiongguanlong,Ziapelta,Achillobator,Acrocanthosaurus,Alamosaurus,Alioramus,Anchiornis,Avaceratops,Bambiraptor,Barosaurus,Beipiaosaurus,Camarasaurus,Camptosaurus,Centrosaurus,Chasmosaurus,Citipati,Concavenator,Dacentrurus,Daspletosaurus,Dracorex,Dryosaurus,Einiosaurus,Eotyrannus,Erlikosaurus,Gastonia,Giraffatitan,Guanlong,Gryposaurus,Hesperosaurus,Heterodontosaurus,Hypsilophodon,Incisivosaurus,Juravenator,Kaatedocus,Leaellynasaura,Lesothosaurus,Majungasaurus,Masiakasaurus,Megaraptor,Muttaburrasaurus,Nanotyrannus,Nothronychus,Olorotitan,Oryctodromeus,Pelecanimimus,Polacanthus,Prenocephale,Rajasaurus,Rugops,Sauropelta,Scelidosaurus,Scutellosaurus,Shunosaurus,Sinornithosaurus,Stygimoloch,Supersaurus,Tenontosaurus,Thescelosaurus,Torvosaurus,Tsintaosaurus,Tuojiangosaurus,Unenlagia,Wuerhosaurus,Xenotarsosaurus,Xuanhanosaurus,Yinlong,Zalmoxes,Zupaysaurus,Anomalocaris,Hallucigenia,Opabinia,Eurypterid/Sea scorpion,Meganeura,Arthropleura,Tiktaalik,Ichthyostega,Placoderm,Helicoprion,Edaphosaurus,Lystrosaurus,Thrinaxodon,Gorgonops,Postosuchus,Basilosaurus,Ambulocetus,Pakicetus,Paraceratherium/Indricotherium,Andrewsarchus,Uintatherium,Hyracotherium/Eohippus,Diprotodon,Thylacoleo,Thylacine,Megalania,Titanoboa,Gastornis,Phorusrhacos,Dodo,Elephant bird,Cave bear,Cave lion,Dire wolf,Doedicurus,Macrauchenia,Toxodon,Chalicotherium,Deinotherium,Platybelodon,Gomphotherium,Moeritherium,Megacerops,Entelodont,Daeodon,Livyatan,Leedsichthys,Xiphactinus,Tylosaurus,Nothosaurus,Placodus,Tanystropheus,Shonisaurus,Temnodontosaurus,Ophthalmosaurus,Cymbospondylus,Pliosaurus,Quetzalcoatlus,Hatzegopteryx,Tupandactylus,Nyctosaurus,Pterodaustro,Zhejiangopterus`},
+
+{p:"A kind of bread", s:"Bread", a:`Bagel,Baguette,Bao/Bao bun,Bap,Barmbrack,Bloomer,Boule,Brioche,Chapati/Chapatti,Challah,Ciabatta,Cornbread,Croissant,Crumpet,Damper,English muffin/Muffin,Flatbread,Focaccia,Injera,Lavash,Matzo/Matzah,Naan/Nan,Pitta/Pita,Pretzel,Pumpernickel,Roti,Rye bread/Rye,Sourdough,Soda bread,Tortilla,Wholemeal/Whole wheat,Bannock,Bialy,Brown bread,Bun,Cob,Cottage loaf,Farl,Fougasse,Grissini/Breadsticks,Kulcha,Lefse,Manakish/Manoushe,Paratha,Puri/Poori,Bhatura,Appam,Dosa,Pandesal/Pan de sal,Pan de muerto,Panettone,Pandoro,Stollen,Simit,Teacake,Zopf,Vollkornbrot,Crispbread/Knackebrod,Rieska,Limpa,Rugbrod,Black bread,Borodinsky,Lepinja,Pogaca,Khachapuri,Kaiser roll,Hoagie roll,Hot dog bun,Milk bread,Shokupan,Melonpan,Sangak,Barbari,Taftoon,Pide,Ekmek,Eish baladi,Arepa,Pupusa,Bolillo,Telera,Concha,Hallulla,Marraqueta,Cuban bread,Potato bread,Malt loaf,Tiger bread/Dutch crunch,Bara brith,Stottie/Stottie cake,Oatcake,Barm cake/Barm,Batch loaf,Split tin,Tin loaf,Piadina,Carasau,Pane,Chollah,White bread,Wholegrain,Multigrain,Granary,Spelt,Ezekiel bread,Sprouted bread,Brown soda,Wheaten bread,Potato farl,Scuffler,Bridie,Bun,Brioche bun,Burger bun,Finger roll,Dinner roll,Crusty roll,Cob loaf,Pain de mie,Pain de campagne,Pain d'epices,Pain au chocolat,Pain au raisin,Pain aux noix,Ficelle,Batard,Epi,Couronne,Fendu,Tordu,Kugelhopf/Gugelhupf,Bretzel,Hefezopf,Brezel,Laugenbrot,Mischbrot,Dinkelbrot,Roggenbrot,Kommissbrot,Graubrot,Weissbrot,Semmel,Brotchen,Kaisersemmel,Schrippe,Fladenbrot,Lahmacun,Bazlama,Yufka,Gozleme,Tandoori roti,Rumali roti,Missi roti,Makki di roti,Thepla,Bhakri,Luchi,Kachori,Sheermal,Taftan,Bakarkhani,Kulcha,Laobing,Mantou,Shaobing,Youtiao,Roti canai,Roti prata,Murtabak,Pan de yuca,Pao de queijo,Chipa,Sopaipilla,Cachapa,Casabe,Bammy,Johnnycake,Hushpuppy,Hush puppy,Biscuit,Scone,Spoonbread,Sally Lunn,Hot cross bun,Chelsea bun,Bath bun,Lardy cake,Stotty,Pikelet,Oatcake,Singing hinny,Bannock,Kaak,Ka'ak,Markook,Saj,Taboon,Khubz,Lavash,Matnakash,Lepyoshka,Tandyr nan,Obi non,Chorek,Tonis puri,Mchadi,Shotis puri,Kalach,Karavai,Korovai,Paska,Kozunak,Cozonac,Pogacha,Sourdough boule,Quick bread,Zucchini bread,Banana bread,Date loaf,Jam bread`},
+
+{p:"A board or card game", s:"Board or card game", a:`Chess,Checkers/Draughts,Backgammon,Go,Mahjong/Mah-jong,Dominoes,Poker,Bridge,Rummy,Solitaire/Patience,Snap,Blackjack/Twenty-one/Pontoon,Cribbage,Canasta,Whist,Hearts,Spades,Euchre,Gin rummy,Baccarat,Uno,Monopoly,Scrabble,Cluedo/Clue,Risk,Ludo,Snakes and ladders/Chutes and ladders,Mancala,Nine men's morris,Shogi,Xiangqi/Chinese chess,Janggi,Othello/Reversi,Connect Four/Connect 4,Battleship/Battleships,Yahtzee,Pictionary,Trivial Pursuit,Jenga,Twister,Sorry,Catan/Settlers of Catan,Carcassonne,Ticket to Ride,Pandemic,Dixit,Codenames,Mastermind,Stratego,Boggle,Bingo,Noughts and crosses/Tic-tac-toe,Crazy eights,Old maid,Go fish,War,Spit/Speed,Slapjack,Beggar my neighbour,Cheat,President,Durak,Bezique,Piquet,Pinochle,Skat,Belote,Tarot/Tarock,Briscola,Scopa,Mus,Truco,Pai gow,Craps,Roulette,Pachisi,Parcheesi,Chinese checkers,Halma,Hex,Hnefatafl/Tafl,Senet,Royal Game of Ur/Game of Ur,Fox and geese,Pente,Gomoku,Nim,Dots and boxes,Kalah,Oware,Bao,Chaturanga,Carrom,Crokinole,Tiddlywinks,Quoridor,Qwirkle,Azul,Splendor,Wingspan,Agricola,Puerto Rico,Terraforming Mars,Gloomhaven,Scythe,Root,Everdell,Kingdomino,Patchwork,Jaipur,Hanabi,Love Letter,Coup,The Resistance,Avalon,Werewolf/Mafia,Blokus,Rummikub,Sequence,Labyrinth,Guess Who,Operation,Mouse Trap,Hungry Hippos,Kerplunk,Buckaroo,Frustration/Trouble,Game of Life/The Game of Life/Life,Candy Land/Candyland,Chutes and ladders,Cranium,Taboo,Articulate,Balderdash,Scattergories,Upwords,Bananagrams,Exploding Kittens,Cards Against Humanity,Dobble/Spot it,Sushi Go,Takenoko,Tokaido,Pandemic Legacy,Dominion,Magic: The Gathering/Magic the Gathering,Pokemon,Yu-Gi-Oh,Bridge,Spider solitaire,Klondike,FreeCell,Pyramid,Golf,Crib,Nap,Newmarket,Knockout whist,Oh hell,German whist,Brag,Three card brag,Faro,Loo,Ombre,Quadrille,Hombre,Cassino,Kemps,Egyptian ratscrew,Ratscrew,Uno Flip,Phase 10,Skip-Bo,Rook,Pitch,Sheepshead,Schafkopf,Doppelkopf,Jass,Klaberjass,Bezique,Sixty-six,Mariage,Tute,Chinchon,Escoba,Brisca,Tressette,Scopone,Rummy 500,Contract rummy,Kalooki,Gin,Mexican train,Muggins,Fives and threes,Shut the box,Liar's dice,Farkle,Perudo,Zilch,Bunco,Yatzy,Kniffel,Backgammon,Nard,Tavla,Tables,Mill,Morris,Achi,Fanorona,Konane,Surakarta,Xiangqi,Makruk,Sittuyin,Jungle/Dou shou qi,Banqi,Gobblet,Quarto,Santorini,Onitama,Hive,Tak,Zertz,Yinsh,Dvonn,Tzaar,Abalone,Lines of Action,Amazons,Arimaa,Kamisado,Mancala`},
+
+{p:"A river", s:"River", a:`Amazon,Nile,Yangtze,Mississippi,Missouri,Yenisei,Yellow River/Huang He,Ob,Parana,Congo,Amur,Lena,Mekong,Mackenzie,Niger,Murray,Volga,Danube,Rhine,Thames,Seine,Loire,Rhone,Po,Tiber,Elbe,Oder,Vistula,Dnieper,Don,Ural,Ganges/Ganga,Indus,Brahmaputra,Irrawaddy,Euphrates,Tigris,Jordan,Zambezi,Limpopo,Orange,Okavango,Senegal,Volta,Colorado,Columbia,Rio Grande,Hudson,Ohio,Tennessee,Arkansas,Yukon,Saint Lawrence/St Lawrence,Fraser,Snake,Delaware,Potomac,Orinoco,Magdalena,Sao Francisco,Uruguay,Paraguay,Darling,Shannon,Severn,Trent,Tyne,Mersey,Clyde,Tay,Dee,Avon,Ouse,Douro/Duero,Tagus/Tajo/Tejo,Ebro,Guadalquivir,Garonne,Dordogne,Meuse/Maas,Scheldt,Moselle,Main,Neckar,Inn,Drava,Sava,Tisza,Prut,Dniester,Neva,Kama,Pechora,Irtysh,Syr Darya,Amu Darya,Kolyma,Indigirka,Salween,Chao Phraya,Red River,Pearl River,Han,Yalu,Narmada,Godavari,Krishna,Kaveri/Cauvery,Yamuna,Sutlej,Jhelum,Chenab,Ravi,Beas,Kabul,Helmand,Karun,Shatt al-Arab,Kura,Aras,Kizilirmak,Orontes,Litani,Awash,Juba,Shebelle,Rufiji,Ruvuma,Kasai,Ubangi,Benue,Gambia,Cuanza/Kwanza,Kunene,Vaal,Tugela,Waikato,Clutha,Whanganui,Fly,Sepik,Mahakam,Kapuas,Rajang,Pasig,Xingu,Tapajos,Madeira,Rio Negro/Negro,Japura,Purus,Jurua,Ucayali,Maranon,Napo,Putumayo,Caqueta,Essequibo,Maroni,Biobio/Bio Bio,Chubut,Salado,Pilcomayo,Bermejo,Iguazu,Tocantins,Araguaia,Usumacinta,Grijalva,Lerma,Balsas,Yaqui,Gila,Platte,Kansas,Brazos,Pecos,Sabine,Wabash,Cumberland,Susquehanna,Connecticut,Kennebec,Penobscot,Merrimack,Sacramento,San Joaquin,Willamette,Klamath,Thelon,Nelson,Churchill,Athabasca,Peace,Saskatchewan,Ottawa,Saguenay,Liffey,Lagan,Boyne,Wye,Usk,Taff,Exe,Tamar,Medway,Cam,Isis,Spey,Tweed,Forth,Ness,Wear,Tees,Aire,Calder,Don,Derwent,Eden,Lune,Ribble,Wharfe,Swale,Ure,Nidd,Hull,Humber,Witham,Welland,Nene,Great Ouse,Stour,Test,Itchen,Arun,Adur,Rother,Kennet,Cherwell,Windrush,Evenlode,Lea/Lee,Wandle,Fleet,Tyburn,Westbourne,Effra,Brent,Colne,Mole,Wey,Darent,Cray,Ravensbourne,Roding,Zaire,Zambezi,Zab/Great Zab,Zarafshan,Zeravshan,Zhujiang,Xi,Qiantang,Huai,Min,Jialing,Wei,Fen,Liao,Songhua,Ussuri,Argun,Selenga,Orkhon,Kherlen,Tuul,Vakhsh,Panj,Quaraí,Quilca,Quinebaug,Quinnipiac,Quequén,Jari,Jequitinhonha,Juruena,Jaguaribe,Jacuí,Jamuna,Jinsha,Jialing,Kuban,Khatanga,Kemi,Kymi,Kokemäenjoki,Klarälven,Glomma,Göta älv,Torne,Dalälven,Vuoksi,Narva,Daugava,Neman,Bug,Warta,Pregolya,Vltava,Morava,Váh,Hron,Ipeľ,Mureș,Olt,Siret,Jiu,Argeș,Iskar,Maritsa,Struma,Vardar,Aliakmonas,Achelous,Alfeios,Evrotas,Piave,Adige,Brenta,Arno,Tevere,Volturno,Garigliano,Ofanto,Tanaro,Ticino,Adda,Oglio,Mincio,Durance,Isère,Saône,Doubs,Ain,Lot,Tarn,Charente,Vienne,Cher,Indre,Allier,Somme,Oise,Marne,Aisne,Yonne,Aube,Sarthe,Mayenne,Vilaine,Rance,Orne,Vire,Aulne,Blavet,Adour,Ariège,Aude,Hérault,Var,Guadiana,Guadalete,Segura,Júcar,Turia,Miño/Minho,Mondego,Sado,Lima,Nalón,Narcea,Sella,Ebro`},
+];
+
+</script>
+<script>
+// Glowjar core: letters, matching, scoring, daily selection. No DOM in here.
+const GJ = (() => {
+  const TIERS = [
+    { name: 'Spark',    v: 4,  letters: 'EAIONRST', color: '#f3ecd2' },
+    { name: 'Flicker',  v: 8,  letters: 'LUDCMH',   color: '#ffe08a' },
+    { name: 'Glow',     v: 15, letters: 'GPBYFW',   color: '#ffbe4d' },
+    { name: 'Beacon',   v: 25, letters: 'KV',       color: '#ff9440' },
+    { name: 'Lantern',  v: 40, letters: 'JX',       color: '#ff6b5e' },
+    { name: 'Starfire', v: 50, letters: 'QZ',       color: '#a6e6ff' },
+  ];
+  const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const LV = {};
+  TIERS.forEach((t, ti) => { for (const c of t.letters) LV[c] = { v: t.v, tier: ti, color: t.color, name: t.name }; });
+  const SEAL_BONUS = 100;
+  const N_PROMPTS = 7;
+  const SECS = 30;
+
+  function keyOf(s) {
+    s = String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ');
+    let w = s.replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+    while (w.length > 1 && (w[0] === 'the' || w[0] === 'a' || w[0] === 'an')) w.shift();
+    w = w.map(x => (x === 'st' ? 'saint' : x === 'mt' ? 'mount' : x));
+    return w.join('').replace(/[0-9]/g, '');
+  }
+  function lettersOf(key) {
+    const out = [];
+    for (const ch of key.toUpperCase()) if (LV[ch] && !out.includes(ch)) out.push(ch);
+    return out;
+  }
+
+  let CATS = null;
+  function cats() {
+    if (CATS) return CATS;
+    CATS = RAW_CATS.map((c, idx) => {
+      const forms = [];
+      const map = new Map();
+      c.a.split(',').map(s => s.trim()).filter(Boolean).forEach((g, gi) => {
+        const names = g.split('/').map(s => s.trim()).filter(Boolean);
+        names.forEach(t => {
+          const k = keyOf(t);
+          if (!k) return;
+          const f = { t, k, gi, display: names[0], L: lettersOf(k) };
+          forms.push(f);
+          if (!map.has(k)) map.set(k, f);
+        });
+      });
+      return { idx, p: c.p, s: c.s, forms, map };
+    });
+    return CATS;
+  }
+
+  function lev(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let prev = new Array(b.length + 1);
+    for (let j = 0; j <= b.length; j++) prev[j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      let rowMin = i;
+      for (let j = 1; j <= b.length; j++) {
+        const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        cur.push(v);
+        if (v < rowMin) rowMin = v;
+      }
+      if (rowMin > max) return max + 1;
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+
+  function match(cat, input) {
+    const k = keyOf(input);
+    if (!k) return null;
+    const m = cat.map;
+    const tries = [k];
+    if (k.endsWith('ies')) tries.push(k.slice(0, -3) + 'y');
+    if (k.endsWith('es')) tries.push(k.slice(0, -2));
+    if (k.endsWith('s')) tries.push(k.slice(0, -1));
+    tries.push(k + 's', k + 'es');
+    for (const t of tries) if (m.has(t)) return m.get(t);
+    if (k.length >= 5) {
+      const maxD = k.length >= 9 ? 2 : 1;
+      let best = null, bd = 99;
+      for (const f of cat.forms) {
+        if (f.k.length < 4) continue;
+        const d = lev(k, f.k, maxD);
+        if (d < bd) { bd = d; best = f; }
+      }
+      if (best && bd <= maxD) return best;
+    }
+    return null;
+  }
+
+  function score(caught, L) {
+    const fresh = L.filter(c => !caught.has(c));
+    let lm = 0;
+    for (const c of fresh) lm += LV[c].v;
+    const sealed = caught.size + fresh.length >= 26;
+    if (sealed) lm += SEAL_BONUS;
+    return { fresh, lm, sealed };
+  }
+
+  function brightest(cat, caught, n = 3) {
+    const seen = new Map();
+    for (const f of cat.forms) {
+      const s = score(caught, f.L);
+      const id = keyOf(f.display);
+      const cur = seen.get(id);
+      if (!cur || s.lm > cur.lm || (s.lm === cur.lm && f.t.length < cur.f.t.length)) seen.set(id, { f, ...s });
+    }
+    return [...seen.values()].sort((a, b) => b.lm - a.lm || a.f.t.length - b.f.t.length).slice(0, n);
+  }
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function pickCats(seed) {
+    const r = rng(seed * 2654435761 + 97);
+    const ids = cats().map(c => c.idx);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    return ids.slice(0, N_PROMPTS);
+  }
+  function dayIndex(d = new Date()) {
+    const a = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    const e = Date.UTC(2026, 10, 18);
+    return Math.max(1, Math.floor((a - e) / 864e5) + 1);
+  }
+
+  function moon(lm) {
+    if (lm <= 0) return '🌑';
+    if (lm < 30) return '🌒';
+    if (lm < 60) return '🌓';
+    if (lm < 100) return '🌔';
+    return '🌕';
+  }
+  function rank(total) {
+    if (total >= 600) return 'Starfire night';
+    if (total >= 450) return 'Lantern night';
+    if (total >= 320) return 'Beacon night';
+    if (total >= 200) return 'Glowing night';
+    if (total >= 100) return 'Flickering night';
+    return 'Moonless night';
+  }
+
+  return { TIERS, ALPHA, LV, SEAL_BONUS, N_PROMPTS, SECS, keyOf, lettersOf, cats, match, score, brightest, pickCats, dayIndex, moon, rank, rng };
+})();
+if (typeof module !== 'undefined') module.exports = GJ;
+
+</script>
+<script>
+(() => {
+  'use strict';
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const C = GJ.cats();
+  const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const KEY = 'glowjar:v1';
+  const FAST = /[?&]fast=1/.test(location.search);
+  const REVEAL_MS = FAST ? 1800 : 9000;
+  const READY_MS = FAST ? 800 : 3500;
+  const MOONS = new Set(['🌑', '🌒', '🌓', '🌔', '🌕']);
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+  };
+
+  const panel = $('#panel'), strip = $('#strip'), tonight = $('#tonight'), jarSlot = $('#jarSlot'), floats = $('#floats');
+  const social = $('#socialCard'), boardCard = $('#boardCard');
+  let prefs = Object.assign({ sound: true }, store.get(KEY + ':prefs', {}));
+  let S = null;              // game state (plain JSON)
+  let deadline = 0, tickRaf = 0, countdownIv = 0, lastNextAt = 0;
+  let stripOverride = null;  // letters to show while a sealed jar is still on screen
+
+  // Shared-world handles. Everything here is optional: the game runs without it.
+  const NET = { room: null, user: null, db: null, uid: null, connected: false, lobbyPeers: [], lastLobby: '', names: {},
+    board: [], boardState: 'off', postError: null, codeError: '' };
+  let P = null;              // the party this page is in, if any
+
+  /* ---------- state ---------- */
+  function freshState(mode, seed) {
+    return { mode, day: GJ.dayIndex(), seed, cats: GJ.pickCats(seed), i: 0, phase: 'intro', caught: [], seals: 0, total: 0, results: [] };
+  }
+  function nightKey(day) { return KEY + ':night:' + day; }
+  function save() { if (S && S.mode === 'daily') store.set(nightKey(S.day), S); }
+  function loadDaily() {
+    const day = GJ.dayIndex();
+    const saved = store.get(nightKey(day), null);
+    if (saved && saved.cats && saved.results) {
+      if (saved.phase !== 'end') saved.phase = 'intro';
+      return saved;
+    }
+    return freshState('daily', day);
+  }
+  function dateLabel() {
+    try { return new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }); } catch (e) { return ''; }
+  }
+
+  /* ---------- sound ---------- */
+  let ac = null;
+  function audio() {
+    if (!prefs.sound) return null;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+      return ac;
+    } catch (e) { return null; }
+  }
+  const NOTES = [659.25, 783.99, 880, 1046.5, 1174.66, 1318.5];
+  function tone(freq, when, dur, vol, type) {
+    const a = audio(); if (!a) return;
+    const t = a.currentTime + (when || 0);
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.06, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  const ping = tier => { tone(NOTES[tier], 0, 0.55, 0.05); tone(NOTES[tier] * 2, 0.01, 0.35, 0.018); };
+  const thud = () => tone(150, 0, 0.18, 0.05, 'triangle');
+  const sealChord = () => [0, 2, 4, 5, 3, 5].forEach((n, k) => tone(NOTES[n], k * 0.07, 0.9, 0.045));
+  const chime = () => [2, 4].forEach((n, k) => tone(NOTES[n], k * 0.09, 0.5, 0.035));
+
+  /* ---------- static bits ---------- */
+  function buildStrip() {
+    strip.innerHTML = GJ.ALPHA.split('').map(ch => {
+      const L = GJ.LV[ch];
+      return `<span class="tile" data-ch="${ch}" style="--c:${L.color}" title="${ch}: ${L.name}, ${L.v} lumens"><b>${ch}</b><small>${L.v}</small></span>`;
+    }).join('');
+    $('#legend').innerHTML = GJ.TIERS.map(t => `<li style="--c:${t.color}"><i></i>${t.name} <b>${t.v}</b></li>`).join('');
+    $('#tierTable').innerHTML = GJ.TIERS.map(t => `<tr style="--c:${t.color}"><td><i></i>${t.name}</td><td class="letters">${t.letters.split('').join(' ')}</td><td>${t.v} lm</td></tr>`).join('');
+  }
+  function paintStrip(preview) {
+    const caught = new Set(stripOverride || S.caught);
+    for (const el of strip.children) {
+      const ch = el.dataset.ch;
+      el.classList.toggle('caught', caught.has(ch));
+      el.classList.toggle('hint', !!preview && preview.includes(ch));
+    }
+    $('#jarCount').textContent = `${caught.size}/26`;
+    $('#sealCount').textContent = `${S.seals} sealed`;
+  }
+  function chips(letters, cls) {
+    return letters.filter(ch => GJ.LV[ch]).map(ch => `<span class="chip ${cls || ''}" style="--c:${GJ.LV[ch].color}">${ch}</span>`).join('');
+  }
+  function letterLm(letters) { return letters.reduce((a, c) => a + (GJ.LV[c] ? GJ.LV[c].v : 0), 0); }
+
+  /* ---------- people ---------- */
+  function idOf(p) { return p.by || (p.presence && typeof p.presence.uid === 'string' ? p.presence.uid : null); }
+  function hashColor(s) {
+    let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return `hsl(${h % 360} 70% 66%)`;
+  }
+  function personName(id, peer) {
+    if (id && id === NET.uid) return 'You';
+    const n = id && NET.names[id] && NET.names[id].name;
+    return n || (peer ? 'Player ' + String(peer).slice(-2).toUpperCase() : 'Someone');
+  }
+  function peerName(p) { return p.sameTab ? 'You' : personName(idOf(p), p.peer); }
+  function personColor(id, peer) { return (id && NET.names[id] && NET.names[id].color) || hashColor(peer || id || 'x'); }
+  function avatar(id, peer) {
+    const url = id && NET.names[id] && NET.names[id].avatarUrl;
+    if (url) return `<img class="av" src="${esc(url)}" alt="">`;
+    return `<span class="av dot" style="--c:${esc(personColor(id, peer))}"></span>`;
+  }
+  async function resolveNames(ids) {
+    if (!NET.user) return;
+    ids = [...new Set(ids.filter(x => typeof x === 'string' && x))];
+    if (!ids.length) return;
+    try {
+      const ps = await NET.user.profiles(ids);
+      let changed = false;
+      for (const i of ids) {
+        const p = ps && ps[i]; if (!p) continue;
+        const prev = NET.names[i];
+        if (!prev || prev.name !== p.name || prev.color !== p.color || prev.avatarUrl !== p.avatarUrl) {
+          NET.names[i] = { name: p.name || '', color: p.color, avatarUrl: p.avatarUrl };
+          changed = true;
+        }
+      }
+      if (changed) { renderSocial(); renderBoard(); renderPartyLive(); }
+    } catch (e) { /* names stay generic */ }
+  }
+
+  /* ---------- tonight list ---------- */
+  function renderTonight() {
+    const party = S.mode === 'party';
+    $('#tonightTitle').textContent = S.mode === 'daily' ? 'Tonight’s seven' : party ? 'This party’s seven' : 'This practice round';
+    if (!S.cats.length) {
+      tonight.innerHTML = '<li class="todo"><span class="n">·</span><span class="cat">The seven categories appear when the host starts the game.</span><span class="res"></span></li>';
+      return;
+    }
+    tonight.innerHTML = S.cats.map((id, k) => {
+      const c = C[id], r = S.results[k];
+      const cur = ['play', 'reveal', 'pplay', 'pwait', 'preveal'].includes(S.phase) && k === S.i;
+      let right = '';
+      if (r) {
+        if (r.match) {
+          const pending = party && !r.settled;
+          right = `<span class="ans">${esc(r.display)}</span><span class="lm ${pending ? 'pending' : ''}">${pending ? '…' : '+' + r.lm}${r.shared ? '<i class="half">½</i>' : ''}</span>`;
+        } else right = `<span class="ans miss">${r.missed ? 'missed' : 'no catch'}</span><span class="lm">0</span>`;
+      }
+      return `<li class="${cur ? 'cur' : ''} ${r ? 'done' : 'todo'}"><span class="n">${k + 1}</span><span class="cat">${esc(c.s)}</span><span class="res">${right}</span></li>`;
+    }).join('');
+  }
+
+  /* ---------- panel ---------- */
+  function render() {
+    document.body.classList.toggle('playing', ['play', 'reveal', 'pplay', 'pwait', 'preveal', 'pready'].includes(S.phase));
+    $('#nightLabel').textContent = S.mode === 'daily' ? `Night #${S.day} · ${dateLabel()}` : S.mode === 'party' ? `Party ${S.code}` : 'Practice round';
+    clearInterval(countdownIv);
+    const views = { intro: introHTML, play: playHTML, reveal: revealHTML, end: endHTML,
+      plobby: pLobbyHTML, pready: pReadyHTML, pplay: pPlayHTML, pwait: pWaitHTML, preveal: pRevealHTML, pfinal: pFinalHTML };
+    panel.innerHTML = (views[S.phase] || introHTML)();
+    renderTonight();
+    paintStrip();
+    renderSocial();
+    renderBoard();
+    renderPartyLive();
+    if (S.phase === 'end' && S.mode === 'daily') { startCountdown(); maybePostScore(); }
+    updateLobby();
+  }
+
+  const partyButton = () => NET.room ? '<button class="btn ghost" id="btnParty" type="button">Play with friends</button>' : '';
+
+  function introHTML() {
+    const k = S.results.length;
+    const cont = k > 0;
+    const practice = S.mode === 'practice';
+    return `
+      <p class="eyebrow">${practice ? 'Practice round · not counted' : `Night #${S.day} · ${esc(dateLabel())}`}</p>
+      <h1 class="hero">Catch all <em>26</em> letters before dawn.</h1>
+      <p class="lede">Seven categories, thirty seconds each. Every new letter in your answer flies into the jar, and rare letters glow brighter. Fill the jar to seal it for <b>+100</b>.</p>
+      <div class="actions">
+        <button class="btn primary" id="btnStart" type="button">${cont ? `Continue from category ${k + 1}` : practice ? 'Start practice' : 'Start tonight’s hunt'}</button>
+        ${practice ? '<button class="btn ghost" id="btnDaily" type="button">Back to tonight</button>' : '<button class="btn ghost" id="btnPractice" type="button">Practice round</button>'}
+        ${partyButton()}
+      </div>
+      <p class="tip">Plan ahead: all seven categories are listed below, so you can decide where your Q, Z, J and X will come from. “Qatar” as a country, “Zettabyte” as a unit…</p>`;
+  }
+
+  function answerForm(cat) {
+    return `
+      <div class="wick" id="wick" aria-hidden="true"><i id="wickBar"></i></div>
+      <form id="answerForm" class="answer" autocomplete="off">
+        <label class="sr" for="answer">Your answer for ${esc(cat.s)}</label>
+        <input id="answer" name="answer" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="60" placeholder="Type an answer…" enterkeyhint="go">
+        <button class="btn primary" type="submit">Catch</button>
+      </form>
+      <div class="preview" id="preview"><span class="gain">New letters will light up here as you type.</span></div>
+      <div class="row"><p class="feedback" id="feedback" role="status" aria-live="polite"></p><span class="secs" id="secs" aria-label="Seconds left">${GJ.SECS}</span></div>`;
+  }
+
+  function playHTML() {
+    const cat = C[S.cats[S.i]];
+    return `
+      <div class="meta"><span class="eyebrow">${S.i + 1} of ${S.cats.length}</span><span class="score"><b>${S.total}</b>lumens</span></div>
+      <h2 class="prompt">${esc(cat.p)}</h2>
+      ${answerForm(cat)}
+      <button class="link" id="btnPass" type="button">Pass on this one</button>`;
+  }
+
+  function bestList(best) {
+    return `<div class="best"><p class="eyebrow">Brightest answers for your jar at that moment</p><ul>${best.map(b => `<li><span>${esc(b.display)}</span><span class="chips">${chips(b.fresh)}</span><b>+${b.lm}</b></li>`).join('')}</ul></div>`;
+  }
+
+  function revealHTML() {
+    const cat = C[S.cats[S.i]];
+    const r = S.results[S.i];
+    const last = S.i + 1 >= S.cats.length;
+    let head;
+    if (r.match) {
+      head = `<h2 class="prompt">${esc(r.display)}</h2>` + (r.fresh.length
+        ? `<p class="lede">Caught <span class="inline-chips">${chips(r.fresh)}</span> for <b>+${r.lm}</b> lumens${r.sealed ? ', and the jar is sealed. A fresh one opens now.' : '.'}</p>`
+        : `<p class="lede">It counts, but every letter was already in your jar. No new light.</p>`);
+    } else {
+      head = `<h2 class="prompt dim">${r.timeout ? 'The wick burned out' : 'Passed'}</h2><p class="lede">No new fireflies this round.</p>`;
+    }
+    return `
+      <div class="meta"><span class="eyebrow">${S.i + 1} of ${S.cats.length} · ${esc(cat.s)}</span><span class="score"><b>${S.total}</b>lumens</span></div>
+      ${head}
+      ${bestList(r.best)}
+      <div class="actions"><button class="btn primary" id="btnNext" type="button">${last ? 'See tonight’s glow' : 'Next category'}</button></div>`;
+  }
+
+  function endHTML() {
+    const caughtNow = S.caught.length;
+    const top = S.results.filter(r => r.match).sort((a, b) => b.lm - a.lm)[0];
+    const daily = S.mode === 'daily';
+    return `
+      <p class="eyebrow">${daily ? `Night #${S.day} · complete` : 'Practice round · complete'}</p>
+      <div class="total"><span class="big">${S.total}</span><span>lumens</span></div>
+      <p class="rank">${GJ.rank(S.total)}</p>
+      <p class="moons" aria-label="Lumens for each category, as moon phases">${S.results.map(r => GJ.moon(r.lm)).join('')}</p>
+      <dl class="sum">
+        <div><dt>In the jar now</dt><dd>${caughtNow}/26 letters</dd></div>
+        <div><dt>Jars sealed</dt><dd>${S.seals}</dd></div>
+        <div><dt>Brightest catch</dt><dd>${top ? `${esc(top.display)} · +${top.lm}` : 'None yet'}</dd></div>
+      </dl>
+      <div class="actions">
+        <button class="btn primary" id="btnShare" type="button">Copy result</button>
+        <button class="btn ghost" id="btnPractice" type="button">${daily ? 'Practice round' : 'Another practice round'}</button>
+        ${daily ? partyButton() : '<button class="btn ghost" id="btnDaily" type="button">Back to tonight</button>'}
+      </div>
+      <textarea id="shareBox" class="sharebox" readonly hidden aria-label="Result to copy"></textarea>
+      ${daily ? '<p class="next">A new night opens in <b id="countdown">--:--:--</b></p>' : ''}`;
+  }
+
+  function shareText() {
+    const head = S.mode === 'daily' ? `Glowjar #${S.day}` : S.mode === 'party' ? `Glowjar party ${S.code}` : 'Glowjar practice';
+    return [
+      `${head} · ${S.total} lumens`,
+      S.results.map(r => GJ.moon(r.lm)).join(''),
+      `${GJ.rank(S.total)} · ${S.seals ? `🫙×${S.seals} sealed` : `${S.caught.length}/26 letters`}`,
+    ].join('\n');
+  }
+
+  function startCountdown() {
+    const upd = () => {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      let s = Math.max(0, Math.floor((next - now) / 1000));
+      const h = String(Math.floor(s / 3600)).padStart(2, '0'); s %= 3600;
+      const m = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      const el = $('#countdown'); if (el) el.textContent = `${h}:${m}:${ss}`;
+      if (GJ.dayIndex() !== S.day && S.mode === 'daily') { clearInterval(countdownIv); S = loadDaily(); respawnJar(); render(); }
+    };
+    upd();
+    countdownIv = setInterval(upd, 1000);
+  }
+
+  /* ---------- solo flow ---------- */
+  function start() { S.phase = 'play'; beginPrompt(); }
+  function focusAnswer() {
+    const inp = $('#answer');
+    if (!inp) return;
+    inp.focus({ preventScroll: true });
+    if (window.innerWidth <= 820) {
+      const top = $('.jarcol').getBoundingClientRect().top + window.scrollY - 8;
+      window.scrollTo({ top, behavior: REDUCE ? 'auto' : 'smooth' });
+    }
+  }
+  function beginPrompt() {
+    render();
+    deadline = performance.now() + GJ.SECS * 1000;
+    cancelAnimationFrame(tickRaf);
+    tick();
+    focusAnswer();
+  }
+  function paintWick(rem, total) {
+    const frac = Math.max(0, Math.min(1, rem / total));
+    const bar = $('#wickBar'), secs = $('#secs'), wick = $('#wick');
+    if (bar) bar.style.width = (frac * 100).toFixed(2) + '%';
+    if (secs) { const v = Math.ceil(Math.max(0, rem) / 1000); if (secs.textContent !== String(v)) secs.textContent = v; secs.classList.toggle('low', rem < 8000); }
+    if (wick) wick.classList.toggle('low', rem < 8000);
+  }
+  function tick() {
+    if (S.phase !== 'play') return;
+    const rem = deadline - performance.now();
+    paintWick(rem, GJ.SECS * 1000);
+    if (rem <= 0) { finish(null, 'timeout'); return; }
+    tickRaf = requestAnimationFrame(tick);
+  }
+
+  function onInput(e) {
+    if (e.target.id === 'codeIn') { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); return; }
+    if (e.target.id !== 'answer') return;
+    const key = GJ.keyOf(e.target.value);
+    const L = GJ.lettersOf(key);
+    const caught = new Set(S.caught);
+    const fb = $('#feedback'); if (fb) { fb.textContent = ''; fb.classList.remove('bad'); }
+    const pv = $('#preview');
+    if (!L.length) { pv.innerHTML = '<span class="gain">New letters will light up here as you type.</span>'; paintStrip(); return; }
+    const s = GJ.score(caught, L);
+    const halfNote = S.mode === 'party' ? ' (half if someone matches you)' : '';
+    pv.innerHTML = chips(L.filter(c => !caught.has(c))) + chips(L.filter(c => caught.has(c)), 'old') +
+      `<span class="gain">${s.fresh.length ? `<b>+${s.lm}</b> if it counts${s.sealed ? ' · seals the jar' : ''}${halfNote}` : 'nothing new'}</span>`;
+    paintStrip(s.fresh);
+  }
+
+  function onSubmit(e) {
+    e.preventDefault();
+    if (e.target.id === 'codeForm') { joinParty($('#codeIn').value); return; }
+    const party = S.mode === 'party';
+    if (party ? S.phase !== 'pplay' : S.phase !== 'play') return;
+    const inp = $('#answer');
+    const val = inp.value.trim();
+    if (!val) { inp.focus(); return; }
+    const cat = C[S.cats[S.i]];
+    const m = GJ.match(cat, val);
+    if (!m) {
+      const fb = $('#feedback');
+      fb.textContent = `“${val.slice(0, 40)}” isn’t on our ${cat.s.toLowerCase()} list. Try another.`;
+      fb.classList.add('bad');
+      inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake');
+      inp.select();
+      thud();
+      return;
+    }
+    audio();
+    if (party) partyAnswer(m, inp.getBoundingClientRect());
+    else finish(m, 'answer');
+  }
+
+  function finish(m, why) {
+    cancelAnimationFrame(tickRaf);
+    const inp = $('#answer');
+    const from = inp ? inp.getBoundingClientRect() : null;
+    const cat = C[S.cats[S.i]];
+    const caught = new Set(S.caught);
+    const best = GJ.brightest(cat, caught, 3).map(b => ({ display: b.f.t, fresh: b.fresh, lm: b.lm }));
+    const r = { match: !!m, display: m ? m.t : '', fresh: [], lm: 0, sealed: false, best, timeout: why === 'timeout' };
+    if (m) {
+      const s = GJ.score(caught, m.L);
+      r.fresh = s.fresh; r.lm = s.lm; r.sealed = s.sealed;
+      S.total += s.lm;
+      if (s.sealed) { S.seals += 1; S.caught = []; stripOverride = GJ.ALPHA.split(''); }
+      else S.caught = S.caught.concat(s.fresh);
+    }
+    S.results.push(r);
+    S.phase = 'reveal';
+    save();
+    render();
+    if (m && r.fresh.length) catchAnimation(r, from, `+${r.lm - (r.sealed ? GJ.SEAL_BONUS : 0)}`);
+    const btn = $('#btnNext'); if (btn) btn.focus({ preventScroll: true });
+    lastNextAt = performance.now();
+  }
+
+  function next() {
+    if (performance.now() - lastNextAt < 350) return;
+    if (S.i + 1 >= S.cats.length) return end();
+    S.i += 1;
+    S.phase = 'play';
+    beginPrompt();
+  }
+
+  function end() {
+    S.phase = 'end';
+    if (S.mode === 'daily') {
+      save();
+      const st = store.get(KEY + ':stats', { played: 0, streak: 0, maxStreak: 0, lastDay: 0, best: 0, seals: 0, totalLumens: 0 });
+      if (st.lastDay !== S.day) {
+        st.played += 1;
+        st.streak = st.lastDay === S.day - 1 ? st.streak + 1 : 1;
+        st.maxStreak = Math.max(st.maxStreak, st.streak);
+        st.best = Math.max(st.best, S.total);
+        st.seals += S.seals;
+        st.totalLumens = (st.totalLumens || 0) + S.total;
+        st.lastDay = S.day;
+        store.set(KEY + ':stats', st);
+      }
+    }
+    render();
+    const b = $('#btnShare'); if (b) b.focus({ preventScroll: true });
+  }
+
+  function practice() {
+    S = freshState('practice', (Math.random() * 1e9) | 0);
+    jar.flies = [];
+    stripOverride = null;
+    render();
+    window.scrollTo({ top: 0, behavior: REDUCE ? 'auto' : 'smooth' });
+  }
+  function backToDaily() {
+    S = loadDaily();
+    respawnJar();
+    render();
+  }
+
+  async function copyResult() {
+    const text = shareText();
+    const box = $('#shareBox');
+    const btn = $('#btnShare');
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = 'Copied';
+      setTimeout(() => { if (btn.isConnected) btn.textContent = 'Copy result'; }, 1800);
+    } catch (e) {
+      box.hidden = false; box.value = text; box.focus(); box.select();
+      btn.textContent = 'Select and copy the text below';
+    }
+  }
+
+  /* ================= multiplayer: lobby (“Here now”) ================= */
+  function lobbyState() {
+    const st = { v: 1, uid: NET.uid || null, doing: 'idle', night: S ? S.day : 0, k: 0, lm: 0, party: null };
+    if (!S) return st;
+    if (S.mode === 'party' && P) {
+      st.doing = 'party';
+      const g = P.game || {};
+      st.party = { code: P.code, host: !!P.host, n: P.peers.length || 1, phase: g.phase || 'lobby', round: (g.round || 0) + 1 };
+    } else if (S.mode === 'practice') st.doing = S.phase === 'intro' ? 'idle' : 'practice';
+    else if (S.phase === 'end') { st.doing = 'done'; st.lm = S.total; }
+    else if (S.phase === 'intro') st.doing = S.results.length ? 'paused' : 'idle';
+    else { st.doing = 'daily'; st.k = S.i + 1; st.lm = S.total; }
+    return st;
+  }
+  function updateLobby() {
+    if (!NET.room) return;
+    const st = lobbyState();
+    const j = JSON.stringify(st);
+    if (j === NET.lastLobby) return;
+    NET.lastLobby = j;
+    NET.room.presence({ uid: NET.uid || null, gj: st }).catch(() => {});
+  }
+  function cleanLobby(p) {
+    const g = p.presence && p.presence.gj;
+    if (!g || typeof g !== 'object') return null;
+    const party = g.party && typeof g.party === 'object' && /^[A-Z]{4}$/.test(String(g.party.code)) ? {
+      code: String(g.party.code), host: g.party.host === true, n: Math.max(1, Math.min(99, Number(g.party.n) || 1)),
+      phase: ['lobby', 'ready', 'answer', 'reveal', 'final'].includes(g.party.phase) ? g.party.phase : 'lobby',
+      round: Math.max(1, Math.min(7, Number(g.party.round) || 1)) } : null;
+    return { doing: String(g.doing || 'idle'), night: Number(g.night) || 0, k: Math.max(0, Math.min(7, Number(g.k) || 0)), lm: Math.max(0, Math.min(99999, Number(g.lm) || 0)), party };
+  }
+  function lobbyStatus(g) {
+    if (!g) return 'Just arrived';
+    switch (g.doing) {
+      case 'daily': return `Hunting night #${g.night} · ${g.k} of 7 · ${g.lm} lm`;
+      case 'done': return `Finished night #${g.night} · ${g.lm} lumens`;
+      case 'paused': return `Partway through night #${g.night}`;
+      case 'practice': return 'Practising';
+      case 'party': return g.party ? `In party ${g.party.code}` : 'In a party';
+      default: return 'Looking around';
+    }
+  }
+  function partyPhaseText(pt) {
+    if (pt.phase === 'lobby') return 'waiting to start';
+    if (pt.phase === 'final') return 'just finished';
+    return `round ${pt.round} of 7`;
+  }
+
+  function renderSocial() {
+    if (!social) return;
+    if (S && S.mode === 'party' && P) { social.hidden = false; social.innerHTML = playersHTML(); return; }
+    if (!NET.room) { social.hidden = true; return; }
+    social.hidden = false;
+    const peers = NET.lobbyPeers.filter(p => p.kind !== 'agent');
+    const others = peers.filter(p => !p.sameTab);
+    const parties = [];
+    const seen = new Set();
+    for (const p of peers) {
+      const g = cleanLobby(p);
+      if (g && g.party && g.party.host && !seen.has(g.party.code)) { seen.add(g.party.code); parties.push({ p, pt: g.party }); }
+    }
+    const rows = peers.slice(0, 12).map(p => {
+      const g = cleanLobby(p);
+      return `<li>${avatar(idOf(p), p.peer)}<span class="who">${esc(peerName(p))}</span><span class="what">${esc(lobbyStatus(g))}</span></li>`;
+    }).join('');
+    const partyRows = parties.map(({ p, pt }) => `
+      <li><span class="pcode">${esc(pt.code)}</span><span class="who">${esc(p.sameTab ? 'Your' : personName(idOf(p), p.peer) + '’s')} party</span><span class="what">${pt.n} ${pt.n === 1 ? 'player' : 'players'} · ${esc(partyPhaseText(pt))}</span>${p.sameTab ? '' : `<button class="btn mini" type="button" data-join="${esc(pt.code)}">Join</button>`}</li>`).join('');
+    social.innerHTML = `
+      <h3>Here now <span class="count">${peers.length || 1}</span></h3>
+      ${NET.connected || peers.length ? `<ul class="people">${rows}</ul>` : '<p class="small">Connecting…</p>'}
+      ${others.length ? '' : '<p class="small">Only you right now. Anyone you share this page with shows up here while they have it open.</p>'}
+      ${parties.length ? `<h4>Open parties</h4><ul class="parties">${partyRows}</ul>` : ''}
+      <form id="codeForm" class="codeform" autocomplete="off">
+        <label for="codeIn" class="small">Got a party code?</label>
+        <input id="codeIn" maxlength="4" placeholder="ABCD" autocapitalize="characters" spellcheck="false" aria-describedby="codeErr">
+        <button class="btn mini" type="submit">Join</button>
+        <span class="small bad" id="codeErr">${esc(NET.codeError)}</span>
+      </form>`;
+  }
+
+  /* ================= multiplayer: tonight’s board ================= */
+  function cleanBoardRow(r) {
+    const moons = [...String(r.moons || '')].filter(ch => MOONS.has(ch)).slice(0, 7).join('');
+    return { id: String(r.id), day: Number(r.day) || 0, lumens: Math.max(0, Math.min(99999, Math.round(Number(r.lumens) || 0))), seals: Math.max(0, Math.min(9, Number(r.seals) || 0)), moons };
+  }
+  function renderBoard() {
+    if (!boardCard) return;
+    if (!NET.db || (S && S.mode === 'party')) { boardCard.hidden = true; return; }
+    boardCard.hidden = false;
+    const day = GJ.dayIndex();
+    const rows = NET.board.filter(r => r.day === day);
+    let body;
+    if (NET.boardState === 'loading') body = '<p class="small">Loading tonight’s scores…</p>';
+    else if (NET.boardState === 'slow' && !rows.length) body = '<p class="small">The board can’t be reached yet. It will fill in when it connects.</p>';
+    else if (NET.boardState === 'error' && !rows.length) body = '<p class="small">The board isn’t available in this view.</p>';
+    else if (!rows.length) body = `<p class="small">Nobody has finished night #${day} yet. Be the first.</p>`;
+    else body = `<ol class="board">${rows.map((r, k) => `
+      <li class="${r.id === NET.uid ? 'me' : ''}"><span class="rk">${k + 1}</span>${avatar(r.id, r.id)}<span class="who">${esc(personName(r.id))}</span><span class="mo" aria-label="Moon phases per category">${esc(r.moons)}</span><b>${r.lumens}</b></li>`).join('')}</ol>`;
+    let note = '';
+    const finished = S && S.mode === 'daily' && S.phase === 'end';
+    if (NET.postError) note = '<p class="small">You can see the board, but your access to this page can’t add a score. Ask the owner to make you a Contributor.</p>';
+    else if (!NET.uid) note = '<p class="small">Scores post when you’re signed in to Claude.</p>';
+    else if (!finished && !(rows.some(r => r.id === NET.uid))) note = '<p class="small">Finish tonight’s hunt and your score lands here.</p>';
+    boardCard.innerHTML = `<h3>Tonight’s board <span class="count">Night #${day}</span></h3>${body}${note}`;
+  }
+  async function maybePostScore() {
+    if (!NET.db || !NET.uid || !S || S.mode !== 'daily' || S.phase !== 'end' || NET.posting) return;
+    const k = KEY + ':posted:' + NET.uid;
+    if (store.get(k, 0) === S.day) return;
+    NET.posting = true;
+    try {
+      await NET.db.doc('scores/' + NET.uid).set({
+        day: S.day, lumens: S.total, seals: S.seals, letters: S.caught.length,
+        moons: S.results.map(r => GJ.moon(r.lm)).join(''), at: Date.now(),
+      });
+      store.set(k, S.day);
+      NET.postError = null;
+    } catch (e) {
+      NET.postError = (e && e.code) || 'error';
+      renderBoard();
+    }
+    NET.posting = false;
+  }
+  function initDb(db) {
+    NET.db = db;
+    NET.boardState = 'loading';
+    renderBoard();
+    const day = GJ.dayIndex();
+    const timer = setTimeout(() => { if (NET.boardState === 'loading') { NET.boardState = 'slow'; renderBoard(); } }, 10000);
+    try {
+      db.collection('scores').where('day', '==', day).orderBy('lumens', 'desc').limit(30).onSnapshot(snap => {
+        if (!snap.metadata || !snap.metadata.fromCache) clearTimeout(timer);
+        NET.board = snap.docs.map(d => cleanBoardRow(Object.assign({}, d.data(), { id: d.id })));
+        NET.boardState = 'ok';
+        resolveNames(NET.board.map(r => r.id));
+        renderBoard();
+      }, () => { clearTimeout(timer); NET.boardState = 'error'; renderBoard(); });
+    } catch (e) { clearTimeout(timer); NET.boardState = 'error'; }
+    maybePostScore();
+  }
+
+  /* ================= multiplayer: party rooms ================= */
+  // Everything a party needs travels in presence, which every admitted viewer may set.
+  // The host's presence carries the game clock; each player's carries their answer and score.
+  function randCode() {
+    const A = 'BCDFGHJKLMNPQRSTVWXZ';
+    let s = ''; for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)];
+    return s;
+  }
+  function cleanGame(g) {
+    if (!g || typeof g !== 'object') return null;
+    const phase = ['lobby', 'ready', 'answer', 'reveal', 'final'].includes(g.phase) ? g.phase : 'lobby';
+    return {
+      id: typeof g.id === 'string' ? g.id.slice(0, 24) : null,
+      seed: Number(g.seed) >>> 0, phase,
+      round: Math.max(0, Math.min(GJ.N_PROMPTS - 1, Number(g.round) || 0)),
+      rounds: GJ.N_PROMPTS, secs: GJ.SECS,
+      endsIn: Math.max(0, Math.min(60000, Number(g.endsIn) || 0)),
+      ver: Number(g.ver) || 0,
+    };
+  }
+  function cleanSt(st) {
+    if (!st || typeof st !== 'object') return null;
+    return {
+      gid: typeof st.gid === 'string' ? st.gid.slice(0, 24) : null,
+      round: Number.isFinite(Number(st.round)) ? Number(st.round) : -1,
+      answered: st.answered === true,
+      ans: typeof st.ans === 'string' ? st.ans.slice(0, 60) : '',
+      fresh: [...new Set(String(st.fresh || '').toUpperCase().split('').filter(c => GJ.LV[c]))],
+      sealed: st.sealed === true,
+      total: Math.max(0, Math.min(99999, Math.round(Number(st.total) || 0))),
+      jar: [...new Set(String(st.jar || '').toUpperCase().split('').filter(c => GJ.LV[c]))].length,
+      seals: Math.max(0, Math.min(9, Number(st.seals) || 0)),
+      moons: [...String(st.moons || '')].filter(ch => MOONS.has(ch)).slice(0, 7).join(''),
+    };
+  }
+  function dupKey(cat, ans) {
+    const m = ans ? GJ.match(cat, ans) : null;
+    return m ? GJ.keyOf(m.display) : '';
+  }
+  function partyPeers() { return P ? P.peers.filter(p => p.kind !== 'agent') : []; }
+  function hostPeer() {
+    const hosts = partyPeers().filter(p => p.presence && p.presence.host === true && p.presence.game);
+    hosts.sort((a, b) => (a.peer < b.peer ? -1 : 1));
+    return hosts[0] || null;
+  }
+
+  async function createParty() { await enterParty(randCode(), true); }
+  async function joinParty(code) {
+    code = String(code || '').toUpperCase().replace(/[^A-Z]/g, '');
+    if (code.length !== 4) { NET.codeError = 'Codes are four letters.'; renderSocial(); return; }
+    NET.codeError = '';
+    await enterParty(code, false);
+  }
+  async function enterParty(code, asHost) {
+    if (!NET.room) return;
+    if (P) await leaveParty(true);
+    cancelAnimationFrame(tickRaf);
+    let r;
+    try { r = await NET.room.join('gj-' + code.toLowerCase()); }
+    catch (e) { NET.codeError = 'Couldn’t open that party. Try again in a moment.'; renderSocial(); return; }
+    P = { code, room: r, host: asHost, game: null, appliedSig: '', appliedId: null, deadline: 0, joinedAt: Date.now(),
+      peers: [], st: null, unsub: [], hostIv: 0, raf: 0, graceUntil: performance.now() + 2500 };
+    S = { mode: 'party', code, day: GJ.dayIndex(), seed: 0, cats: [], i: 0, phase: 'plobby', caught: [], seals: 0, total: 0, results: [], gid: null };
+    jar.flies = []; stripOverride = null;
+    P.unsub.push(r.onPeers(onPartyPeers, () => partyLost()));
+    const base = { v: 1, uid: NET.uid || null, host: asHost, st: null, game: null };
+    if (asHost) {
+      P.game = { id: null, seed: 0, phase: 'lobby', round: 0, rounds: GJ.N_PROMPTS, secs: GJ.SECS, endsIn: 0, ver: 1 };
+      base.game = P.game;
+      startHostLoop();
+    }
+    r.presence(base).catch(() => {});
+    render();
+    window.scrollTo({ top: 0, behavior: REDUCE ? 'auto' : 'smooth' });
+    partyLoop();
+  }
+  async function leaveParty(silent) {
+    if (!P) return;
+    const p = P; P = null;
+    stopHostLoop(p);
+    cancelAnimationFrame(p.raf);
+    p.unsub.forEach(u => { try { u(); } catch (e) { /* already gone */ } });
+    try { await p.room.leave(); } catch (e) { /* already left */ }
+    if (!silent) { S = loadDaily(); respawnJar(); render(); }
+  }
+  function partyLost() {
+    if (!P) return;
+    leaveParty(false);
+    NET.codeError = 'The party connection dropped.';
+    renderSocial();
+  }
+
+  function setSt(patch) {
+    if (!P) return;
+    P.st = Object.assign({}, P.st || {}, patch);
+    P.room.presence({ st: P.st }).catch(() => {});
+  }
+
+  function onPartyPeers(ch) {
+    if (!P) return;
+    P.peers = ch.peers.filter(p => p.kind !== 'agent');
+    resolveNames(P.peers.map(idOf));
+    const host = hostPeer();
+    if (host && P.host && !host.sameTab) {
+      // two hosts after a hand-off: the lower peer label keeps it
+      P.host = false; stopHostLoop(P);
+      P.room.presence({ host: false, game: null }).catch(() => {});
+    }
+    if (host && !host.sameTab) applyGame(cleanGame(host.presence.game));
+    if (!host && !P.host) {
+      const wait = P.graceUntil - performance.now();
+      if (wait <= 0) {
+        const sorted = [...P.peers].sort((a, b) => (a.peer < b.peer ? -1 : 1));
+        if (sorted[0] && sorted[0].sameTab) becomeHost();
+      } else if (!P.graceTimer) {
+        P.graceTimer = setTimeout(() => { if (P) { P.graceTimer = 0; onPartyPeers({ peers: P.room.peers() }); } }, wait + 60);
+      }
+    }
+    if (S.phase === 'preveal' || S.phase === 'pfinal') settleRound(S.i);
+    renderPartyLive();
+    updateLobby();
+  }
+
+  function becomeHost() {
+    if (!P) return;
+    P.host = true;
+    const prev = P.game;
+    const g = prev ? Object.assign({}, prev, { ver: (prev.ver || 0) + 1, endsIn: Math.max(0, P.deadline - performance.now()) })
+      : { id: null, seed: 0, phase: 'lobby', round: 0, rounds: GJ.N_PROMPTS, secs: GJ.SECS, endsIn: 0, ver: 1 };
+    P.game = g;
+    P.room.presence({ host: true, game: g }).catch(() => {});
+    startHostLoop();
+    render();
+  }
+  function setGame(patch) {
+    P.game = Object.assign({}, P.game, patch, { ver: (P.game.ver || 0) + 1 });
+    P.room.presence({ host: true, game: P.game }).catch(() => {});
+    applyGame(P.game);
+  }
+  function startHostLoop() { stopHostLoop(P); if (P) P.hostIv = setInterval(hostTick, 200); }
+  function stopHostLoop(p) { if (p && p.hostIv) { clearInterval(p.hostIv); p.hostIv = 0; } }
+  function hostTick() {
+    if (!P || !P.host || !P.game) return;
+    const g = P.game, now = performance.now();
+    if (g.phase === 'ready' && now >= P.deadline) setGame({ phase: 'answer', round: 0, endsIn: g.secs * 1000 });
+    else if (g.phase === 'answer') {
+      const players = P.room.peers().filter(p => p.kind !== 'agent');
+      const all = players.length > 0 && players.every(p => {
+        const st = cleanSt(p.presence && p.presence.st);
+        return st && st.gid === g.id && st.round === g.round && st.answered;
+      });
+      if (all || now >= P.deadline + 1200) setGame({ phase: 'reveal', endsIn: REVEAL_MS });
+    } else if (g.phase === 'reveal' && now >= P.deadline) hostAdvance();
+  }
+  function hostAdvance() {
+    if (!P || !P.host) return;
+    const g = P.game;
+    if (g.phase !== 'reveal') return;
+    if (g.round + 1 >= g.rounds) setGame({ phase: 'final', endsIn: 0 });
+    else setGame({ phase: 'answer', round: g.round + 1, endsIn: g.secs * 1000 });
+  }
+  function hostStart() {
+    if (!P || !P.host) return;
+    setGame({ id: 'g' + Math.random().toString(36).slice(2, 9), seed: (Math.random() * 1e9) >>> 0, phase: 'ready', round: 0, endsIn: READY_MS });
+  }
+
+  function applyGame(g) {
+    if (!P || !g) return;
+    P.game = g;
+    const sig = `${g.id}|${g.phase}|${g.round}`;
+    if (sig === P.appliedSig) return;
+    const newGame = g.id && g.id !== P.appliedId;
+    P.appliedSig = sig;
+    P.deadline = performance.now() + g.endsIn;
+    if (newGame) {
+      P.appliedId = g.id;
+      Object.assign(S, { seed: g.seed, cats: GJ.pickCats(g.seed), gid: g.id, caught: [], seals: 0, total: 0, results: [], i: 0 });
+      jar.flies = []; stripOverride = null;
+      setSt({ gid: g.id, round: -1, answered: false, ans: '', fresh: '', sealed: false, total: 0, jar: '', seals: 0, moons: '' });
+    }
+    if (g.phase === 'lobby') S.phase = 'plobby';
+    else if (g.phase === 'ready') S.phase = 'pready';
+    else if (g.phase === 'answer') {
+      padResults(g.round); S.i = g.round;
+      S.phase = S.results[g.round] ? 'pwait' : 'pplay';
+    } else if (g.phase === 'reveal') {
+      padResults(g.round); S.i = g.round;
+      if (!S.results[g.round]) partyCommit(null, 'timeout');
+      S.phase = 'preveal';
+    } else if (g.phase === 'final') {
+      S.i = g.round;
+      padResults(g.round);
+      if (!S.results[g.round]) partyCommit(null, 'timeout');
+      S.phase = 'pfinal';
+      chime();
+    }
+    render();
+    if (S.phase === 'pplay') focusAnswer();
+    if (S.phase === 'preveal' || S.phase === 'pfinal') settleRound(S.i);
+  }
+  function padResults(k) {
+    for (let j = 0; j < k; j++) {
+      if (!S.results[j]) S.results[j] = { match: false, display: '', fresh: [], lm: 0, raw: 0, sealed: false, best: [], missed: true, settled: true, shared: false };
+    }
+  }
+  function partyCommit(m, why) {
+    const k = S.i;
+    const cat = C[S.cats[k]];
+    const caught = new Set(S.caught);
+    const best = GJ.brightest(cat, caught, 2).map(b => ({ display: b.f.t, fresh: b.fresh, lm: b.lm }));
+    const sc = m ? GJ.score(caught, m.L) : { fresh: [], lm: 0, sealed: false };
+    const r = { match: !!m, display: m ? m.t : '', fresh: sc.fresh, raw: sc.lm, lm: 0, sealed: sc.sealed, best,
+      timeout: why === 'timeout', settled: false, shared: false };
+    if (m) {
+      if (sc.sealed) { S.seals += 1; S.caught = []; stripOverride = GJ.ALPHA.split(''); }
+      else S.caught = S.caught.concat(sc.fresh);
+    }
+    S.results[k] = r;
+    setSt({ gid: S.gid, round: k, answered: true, ans: r.display, fresh: sc.fresh.join(''), sealed: sc.sealed,
+      total: S.total, jar: S.caught.join(''), seals: S.seals });
+    return r;
+  }
+  function partyAnswer(m, from) {
+    const r = partyCommit(m, 'answer');
+    S.phase = 'pwait';
+    render();
+    if (r.fresh.length) catchAnimation(r, from, '');
+  }
+  function partyPass() {
+    if (S.phase !== 'pplay') return;
+    partyCommit(null, 'pass');
+    S.phase = 'pwait';
+    render();
+  }
+
+  // Everyone’s answer for round k, recomputed locally from what each player shared.
+  function roundRows(k) {
+    if (!P || !S.cats.length) return [];
+    const cat = C[S.cats[k]];
+    const rows = partyPeers().map(p => {
+      if (p.sameTab) {
+        const r = S.results[k];
+        return { p, me: true, ans: r && r.match ? r.display : '', fresh: r ? r.fresh : [], sealed: !!(r && r.sealed), answered: !!r, total: S.total };
+      }
+      const st = cleanSt(p.presence && p.presence.st);
+      const ok = st && st.gid === S.gid && st.round === k && st.answered;
+      return { p, me: false, ans: ok ? st.ans : '', fresh: ok ? st.fresh : [], sealed: ok && st.sealed, answered: !!ok, total: st && st.gid === S.gid ? st.total : 0 };
+    });
+    const keys = rows.map(r => dupKey(cat, r.ans));
+    rows.forEach((r, i) => {
+      r.key = keys[i];
+      r.shared = !!r.key && keys.filter(x => x === r.key).length > 1;
+      const base = letterLm(r.fresh);
+      r.lm = r.ans ? (r.shared ? Math.round(base / 2) : base) + (r.sealed ? GJ.SEAL_BONUS : 0) : 0;
+    });
+    return rows.sort((a, b) => b.lm - a.lm);
+  }
+  function settleRound(k) {
+    const r = S.results[k];
+    if (!r || r.missed) return;
+    const rows = roundRows(k);
+    const mine = rows.find(x => x.me);
+    const lm = mine ? mine.lm : 0;
+    const shared = !!(mine && mine.shared);
+    if (!r.settled) {
+      r.settled = true; r.lm = lm; r.shared = shared; S.total += lm;
+      if (lm > 0) floatText(`+${lm}${shared ? ' (½)' : ''}`);
+    } else if (lm !== r.lm) {
+      S.total += lm - r.lm; r.lm = lm; r.shared = shared;
+    } else return;
+    setSt({ total: S.total, moons: S.results.map(x => GJ.moon(x.lm)).join('') });
+    renderTonight();
+    const sc = $('#pScore'); if (sc) sc.textContent = S.total;
+  }
+
+  function partyLoop() {
+    if (!P) return;
+    const rem = P.deadline - performance.now();
+    if (S.phase === 'pready') { const el = $('#readyCount'); if (el) { const v = String(Math.max(1, Math.ceil(rem / 1000))); if (el.textContent !== v) el.textContent = v; } }
+    if (S.phase === 'pplay' || S.phase === 'pwait') {
+      paintWick(rem, GJ.SECS * 1000);
+      if (S.phase === 'pplay' && rem <= 0) { partyCommit(null, 'timeout'); S.phase = 'pwait'; render(); }
+    }
+    if (S.phase === 'preveal') { const bar = $('#revealBar'); if (bar) bar.style.width = (Math.max(0, Math.min(1, rem / REVEAL_MS)) * 100).toFixed(1) + '%'; }
+    P.raf = requestAnimationFrame(partyLoop);
+  }
+
+  /* ---------- party views ---------- */
+  function codeChips(code) { return `<span class="codechips" aria-label="Party code ${esc(code)}">${chips(code.split(''))}</span>`; }
+  function hostName() { const h = hostPeer(); return h ? peerName(h) : 'the host'; }
+
+  function pLobbyHTML() {
+    const isHost = P && P.host;
+    return `
+      <p class="eyebrow">Party · <span id="hereCount">${partyPeers().length || 1}</span> here</p>
+      <h1 class="hero party">Party ${codeChips(S.code)}</h1>
+      <p class="lede">${isHost ? 'Friends with this page open will see your party under <b>Here now</b> and can join with one tap, or by typing the code.' : `You’re in. Waiting for <span id="hostName">${esc(hostName())}</span> to start.`}</p>
+      <p class="tip">Seven rounds, everyone on the same category at once, 30 seconds each. When two players give the same answer, both get half the lumens, so go for the one nobody else will think of.</p>
+      <div class="actions">
+        ${isHost ? '<button class="btn primary" id="btnPStart" type="button">Start the game</button>' : ''}
+        <button class="btn ghost" id="btnPLeave" type="button">Leave party</button>
+      </div>`;
+  }
+  function pReadyHTML() {
+    return `
+      <p class="eyebrow">Party ${esc(S.code)} · get ready</p>
+      <h1 class="hero">Round 1 in <em id="readyCount">3</em></h1>
+      <p class="lede">The seven categories are listed below. Plan where your rare letters will come from.</p>`;
+  }
+  function pMeta() {
+    return `<div class="meta"><span class="eyebrow">Round ${S.i + 1} of ${S.cats.length} · Party ${esc(S.code)}</span><span class="score"><b id="pScore">${S.total}</b>lumens</span></div>`;
+  }
+  function pPlayHTML() {
+    const cat = C[S.cats[S.i]];
+    return `${pMeta()}
+      <h2 class="prompt">${esc(cat.p)}</h2>
+      ${answerForm(cat)}
+      <div class="row"><span class="small" id="answeredLine"></span><span class="linkrow"><button class="link" id="btnPass" type="button">Pass on this one</button><button class="link" id="btnPLeave" type="button">Leave party</button></span></div>`;
+  }
+  function pWaitHTML() {
+    const cat = C[S.cats[S.i]];
+    const r = S.results[S.i];
+    const said = r && r.match
+      ? (r.fresh.length ? `You said <b>${esc(r.display)}</b> and caught <span class="inline-chips">${chips(r.fresh)}</span>.` : `You said <b>${esc(r.display)}</b>, but every letter was already in your jar.`)
+      : r && r.timeout ? 'The wick burned out before you answered.' : 'You passed this round.';
+    return `${pMeta()}
+      <h2 class="prompt">${esc(cat.p)}</h2>
+      <div class="wick" id="wick" aria-hidden="true"><i id="wickBar"></i></div>
+      <p class="lede">${said} Lumens are counted when everyone is in.</p>
+      <div class="row"><p class="feedback" id="answeredLine" role="status" aria-live="polite"></p><span class="secs" id="secs">${GJ.SECS}</span></div>
+      <button class="link" id="btnPLeave" type="button">Leave party</button>`;
+  }
+  function pRevealHTML() {
+    const cat = C[S.cats[S.i]];
+    const r = S.results[S.i];
+    const isHost = P && P.host;
+    const last = S.i + 1 >= S.cats.length;
+    return `${pMeta()}
+      <h2 class="prompt">${esc(cat.p)}</h2>
+      <ul class="answers" id="revealList"></ul>
+      ${r && r.best && r.best.length ? bestList(r.best) : ''}
+      <div class="wick soft" aria-hidden="true"><i id="revealBar"></i></div>
+      <div class="actions">${isHost ? `<button class="btn primary" id="btnPNext" type="button">${last ? 'Final standings' : 'Next round now'}</button>` : `<p class="small">${last ? 'Final standings' : 'The next round'} start${last ? '' : 's'} in a moment.</p>`}
+      <button class="link" id="btnPLeave" type="button">Leave party</button></div>`;
+  }
+  function pFinalHTML() {
+    const isHost = P && P.host;
+    return `
+      <p class="eyebrow">Party ${esc(S.code)} · final standings</p>
+      <h1 class="hero" id="winnerLine">Final standings</h1>
+      <ol class="standings" id="standings"></ol>
+      <p class="moons" aria-label="Your lumens per round">${S.results.map(r => GJ.moon(r.lm)).join('')}</p>
+      <div class="actions">
+        ${isHost ? '<button class="btn primary" id="btnPAgain" type="button">Play again</button>' : `<p class="small">Waiting for <span>${esc(hostName())}</span> to start another game.</p>`}
+        <button class="btn ghost" id="btnShare" type="button">Copy my result</button>
+        <button class="btn ghost" id="btnPLeave" type="button">Leave party</button>
+      </div>
+      <textarea id="shareBox" class="sharebox" readonly hidden aria-label="Result to copy"></textarea>`;
+  }
+
+  function playersHTML() {
+    const g = P && P.game;
+    const peers = partyPeers();
+    const rows = peers.map(p => {
+      const st = p.sameTab ? null : cleanSt(p.presence && p.presence.st);
+      const inGame = p.sameTab || (st && st.gid === S.gid && S.gid);
+      const total = p.sameTab ? S.total : inGame ? st.total : 0;
+      const jarN = p.sameTab ? S.caught.length : inGame ? st.jar : 0;
+      const isHost = p.presence && p.presence.host === true;
+      let status = isHost ? 'host' : 'ready';
+      if (g && (g.phase === 'answer')) {
+        const done = p.sameTab ? !!S.results[S.i] : !!(st && st.gid === S.gid && st.round === g.round && st.answered);
+        status = done ? '✓ in' : 'thinking…';
+      } else if (g && g.phase === 'reveal') status = '';
+      else if (g && g.phase === 'final') status = '';
+      return { p, total, jarN, status, isHost };
+    }).sort((a, b) => b.total - a.total);
+    return `
+      <h3>Party ${codeChips(S.code)} <span class="count">${peers.length || 1}</span></h3>
+      <ul class="players">${rows.map(x => `
+        <li class="${x.p.sameTab ? 'me' : ''}">${avatar(idOf(x.p), x.p.peer)}<span class="who">${esc(peerName(x.p))}${x.isHost ? ' <i class="crown" title="Host">♛</i>' : ''}</span><span class="what">${esc(x.status)}</span><span class="jarn" title="Letters in their jar">${x.jarN}/26</span><b>${x.total}</b></li>`).join('')}</ul>`;
+  }
+
+  function renderPartyLive() {
+    if (!S || S.mode !== 'party' || !P) return;
+    if (social) social.innerHTML = playersHTML();
+    const peers = partyPeers();
+    const g = P.game;
+    const line = $('#answeredLine');
+    if (line && g && g.phase === 'answer') {
+      const n = peers.filter(p => p.sameTab ? !!S.results[S.i] : (() => { const st = cleanSt(p.presence && p.presence.st); return st && st.gid === S.gid && st.round === g.round && st.answered; })()).length;
+      line.textContent = n >= peers.length ? 'Everyone’s in.' : `${n} of ${peers.length} answered`;
+    }
+    const hn = $('#hostName'); if (hn) hn.textContent = hostName();
+    const hc = $('#hereCount'); if (hc) hc.textContent = String(peers.length || 1);
+    const list = $('#revealList');
+    if (list && S.phase === 'preveal') {
+      list.innerHTML = roundRows(S.i).map(x => `
+        <li class="${x.me ? 'me' : ''}">${avatar(idOf(x.p), x.p.peer)}<span class="who">${esc(peerName(x.p))}</span>
+          <span class="said">${x.ans ? esc(x.ans) : `<i>${x.answered ? 'no catch' : 'no answer'}</i>`}${x.shared ? ' <span class="tag">shared · ½</span>' : ''}${x.sealed && x.ans ? ' <span class="tag seal">sealed</span>' : ''}</span>
+          <span class="chips">${chips(x.fresh)}</span><b>+${x.lm}</b></li>`).join('');
+    }
+    const standings = $('#standings');
+    if (standings && S.phase === 'pfinal') {
+      const rows = peers.map(p => {
+        if (p.sameTab) return { p, total: S.total, moons: S.results.map(r => GJ.moon(r.lm)).join('') };
+        const st = cleanSt(p.presence && p.presence.st);
+        return { p, total: st && st.gid === S.gid ? st.total : 0, moons: st && st.gid === S.gid ? st.moons : '' };
+      }).sort((a, b) => b.total - a.total);
+      standings.innerHTML = rows.map((x, k) => `
+        <li class="${x.p.sameTab ? 'me' : ''}"><span class="rk">${k === 0 ? '♛' : k + 1}</span>${avatar(idOf(x.p), x.p.peer)}<span class="who">${esc(peerName(x.p))}</span><span class="mo">${esc(x.moons)}</span><b>${x.total}</b></li>`).join('');
+      const w = $('#winnerLine');
+      if (w && rows.length) {
+        const tie = rows.length > 1 && rows[0].total === rows[1].total;
+        w.textContent = rows.length === 1 ? `${rows[0].total} lumens` : tie ? 'It’s a tie at the top' : `${peerName(rows[0].p)} ${rows[0].p.sameTab ? 'win' : 'wins'}`;
+      }
+    }
+  }
+
+  /* ---------- dialogs & controls ---------- */
+  function openDlg(id) {
+    const d = $(id);
+    if (id === '#statsDlg') {
+      const st = store.get(KEY + ':stats', { played: 0, streak: 0, maxStreak: 0, best: 0, seals: 0, totalLumens: 0 });
+      const avg = st.played ? Math.round((st.totalLumens || 0) / st.played) : 0;
+      $('#statsBody').innerHTML = [
+        ['Nights played', st.played], ['Current streak', st.streak], ['Longest streak', st.maxStreak],
+        ['Brightest night', st.best], ['Average lumens', avg], ['Jars sealed', st.seals],
+      ].map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('');
+    }
+    try { d.showModal(); } catch (e) { d.setAttribute('open', ''); }
+  }
+  document.querySelectorAll('dialog').forEach(d => {
+    d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-close]')) d.close(); });
+  });
+  $('#btnHelp').addEventListener('click', () => openDlg('#helpDlg'));
+  $('#btnStats').addEventListener('click', () => openDlg('#statsDlg'));
+  const soundBtn = $('#btnSound');
+  function paintSound() { soundBtn.setAttribute('aria-pressed', String(prefs.sound)); $('#soundWaves').style.display = prefs.sound ? '' : 'none'; }
+  soundBtn.addEventListener('click', () => { prefs.sound = !prefs.sound; store.set(KEY + ':prefs', prefs); paintSound(); if (prefs.sound) ping(2); });
+
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.join) { audio(); joinParty(b.dataset.join); return; }
+    switch (b.id) {
+      case 'btnStart': audio(); start(); break;
+      case 'btnPractice': practice(); break;
+      case 'btnDaily': backToDaily(); break;
+      case 'btnNext': next(); break;
+      case 'btnPass': if (S.mode === 'party') partyPass(); else finish(null, 'pass'); break;
+      case 'btnShare': copyResult(); break;
+      case 'btnParty': audio(); createParty(); break;
+      case 'btnPStart': audio(); hostStart(); break;
+      case 'btnPNext': hostAdvance(); break;
+      case 'btnPAgain': hostStart(); break;
+      case 'btnPLeave': leaveParty(false); break;
+    }
+  });
+  document.addEventListener('submit', onSubmit);
+  document.addEventListener('input', onInput);
+
+  /* ---------- canvas: sky + jar ---------- */
+  const sky = $('#sky'), fx = $('#fx');
+  const sctx = sky.getContext('2d'), fctx = fx.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  let grass = [], stars = [], ambient = [];
+  const jar = { flies: [], flash: 0 };
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  const sprites = {};
+  function sprite(color) {
+    if (sprites[color]) return sprites[color];
+    const s = document.createElement('canvas'); s.width = s.height = 128;
+    const g = s.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, hexA(color, 1)); gr.addColorStop(0.16, hexA(color, 0.85));
+    gr.addColorStop(0.42, hexA(color, 0.22)); gr.addColorStop(1, hexA(color, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    return (sprites[color] = s);
+  }
+
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    for (const c of [sky, fx]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
+    sctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    fctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const r = GJ.rng(7);
+    grass = [];
+    const n = Math.round(W / 7);
+    for (let k = 0; k < n; k++) grass.push({ x: (k + r()) * (W / n), h: 26 + r() * 64 * (0.6 + 0.4 * Math.sin(k * 0.21)), lean: (r() - 0.5) * 18, w: 3 + r() * 4, ph: r() * 6.28, shade: r() });
+    stars = [];
+    for (let k = 0; k < Math.round(W * H / 16000); k++) stars.push({ x: r() * W, y: r() * H * 0.6, s: r() * 1.3 + 0.3, ph: r() * 6.28 });
+    if (!ambient.length) for (let k = 0; k < 18; k++) ambient.push({ x: Math.random() * W, y: H * (0.35 + Math.random() * 0.6), vx: 0, vy: 0, ph: Math.random() * 6.28, sp: 0.6 + Math.random() * 0.8 });
+  }
+
+  function geom() {
+    const r = jarSlot.getBoundingClientRect();
+    const h = Math.max(120, r.height - 30);
+    const w = Math.min(r.width * 0.82, h * 0.74);
+    const cx = r.left + r.width / 2, top = r.top + 6;
+    const lidH = h * 0.075, neckTop = top + lidH, neckBottom = neckTop + h * 0.045;
+    const nw = w * 0.6, lw = w * 0.67, bw = w;
+    const shoulderY = neckBottom + h * 0.1, bottom = top + h, rad = w * 0.17;
+    const R = Math.max(11, Math.min(20, w * 0.068));
+    return { r, w, h, cx, top, lidH, neckTop, neckBottom, nw, lw, bw, shoulderY, bottom, rad, R, lx2: cx + lw / 2,
+      inner: { x0: cx - bw / 2 + R + 4, x1: cx + bw / 2 - R - 4, y0: shoulderY + R * 0.6, y1: bottom - R - 6 },
+      mouth: { x: cx, y: neckTop + 2 } };
+  }
+
+  function jarPath(ctx, g) {
+    const { cx, nw, bw, neckTop, neckBottom, shoulderY, bottom, rad } = g;
+    const sh = shoulderY - neckBottom;
+    ctx.beginPath();
+    ctx.moveTo(cx - nw / 2, neckTop);
+    ctx.lineTo(cx - nw / 2, neckBottom);
+    ctx.bezierCurveTo(cx - nw / 2, neckBottom + sh * 0.55, cx - bw / 2, neckBottom + sh * 0.25, cx - bw / 2, shoulderY);
+    ctx.lineTo(cx - bw / 2, bottom - rad);
+    ctx.quadraticCurveTo(cx - bw / 2, bottom, cx - bw / 2 + rad, bottom);
+    ctx.lineTo(cx + bw / 2 - rad, bottom);
+    ctx.quadraticCurveTo(cx + bw / 2, bottom, cx + bw / 2, bottom - rad);
+    ctx.lineTo(cx + bw / 2, shoulderY);
+    ctx.bezierCurveTo(cx + bw / 2, neckBottom + sh * 0.25, cx + nw / 2, neckBottom + sh * 0.55, cx + nw / 2, neckBottom);
+    ctx.lineTo(cx + nw / 2, neckTop);
+  }
+
+  function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+  }
+
+  function drawJarBack(ctx, g) {
+    const inJar = jar.flies.filter(p => p.mode === 'jar').length;
+    const fill = Math.min(1, inJar / 26);
+    jarPath(ctx, g); ctx.closePath();
+    const midY = (g.shoulderY + g.bottom) / 2;
+    const glow = ctx.createRadialGradient(g.cx, midY, 0, g.cx, midY, g.bw * 0.85);
+    const a = 0.03 + 0.2 * fill + 0.45 * jar.flash;
+    glow.addColorStop(0, `rgba(255,201,94,${a})`);
+    glow.addColorStop(1, 'rgba(255,201,94,0)');
+    ctx.fillStyle = glow; ctx.fill();
+    const tint = ctx.createLinearGradient(g.cx - g.bw / 2, 0, g.cx + g.bw / 2, 0);
+    tint.addColorStop(0, 'rgba(190,225,235,0.10)'); tint.addColorStop(0.3, 'rgba(190,225,235,0.03)');
+    tint.addColorStop(0.75, 'rgba(190,225,235,0.02)'); tint.addColorStop(1, 'rgba(190,225,235,0.09)');
+    ctx.fillStyle = tint; ctx.fill();
+  }
+
+  function drawJarFront(ctx, g) {
+    jarPath(ctx, g);
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(214,236,240,0.42)'; ctx.stroke();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = Math.max(4, g.w * 0.03);
+    ctx.beginPath(); ctx.moveTo(g.cx - g.bw / 2 + g.w * 0.08, g.shoulderY + g.h * 0.06); ctx.lineTo(g.cx - g.bw / 2 + g.w * 0.08, g.bottom - g.rad - g.h * 0.04); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = Math.max(2, g.w * 0.015);
+    ctx.beginPath(); ctx.moveTo(g.cx + g.bw / 2 - g.w * 0.07, g.shoulderY + g.h * 0.1); ctx.lineTo(g.cx + g.bw / 2 - g.w * 0.07, g.shoulderY + g.h * 0.28); ctx.stroke();
+    ctx.strokeStyle = 'rgba(214,236,240,0.3)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(g.cx - g.nw / 2 - 3, g.neckBottom - 2); ctx.lineTo(g.cx + g.nw / 2 + 3, g.neckBottom - 2); ctx.stroke();
+    const lx = g.cx - g.lw / 2, ly = g.top;
+    rr(ctx, lx, ly, g.lw, g.lidH, Math.min(7, g.lidH / 2.5));
+    const lg = ctx.createLinearGradient(0, ly, 0, ly + g.lidH);
+    lg.addColorStop(0, '#6f7f84'); lg.addColorStop(0.45, '#3d4c52'); lg.addColorStop(1, '#25323a');
+    ctx.fillStyle = lg; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    for (let x = lx + 5; x < lx + g.lw; x += 6) { ctx.beginPath(); ctx.moveTo(x, ly); ctx.lineTo(x, ly + g.lidH); ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle = '#0b151b';
+    for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.arc(g.cx + k * g.lw * 0.22, ly + g.lidH * 0.5, Math.max(1.6, g.lidH * 0.12), 0, 6.283); ctx.fill(); }
+    if (jar.flash > 0.02) {
+      rr(ctx, lx, ly, g.lw, g.lidH, Math.min(7, g.lidH / 2.5));
+      ctx.fillStyle = `rgba(255,236,190,${jar.flash * 0.6})`; ctx.fill();
+    }
+    const tagW = Math.max(52, Math.min(84, g.w * 0.25)), tagH = Math.max(22, Math.min(34, g.w * 0.1));
+    const tx = g.lx2 + 10, ty = g.top + g.lidH * 0.55;
+    ctx.strokeStyle = 'rgba(239,232,211,0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(g.cx + g.nw / 2 - 2, g.neckBottom - 3); ctx.quadraticCurveTo(tx, g.neckBottom + 6, tx + 7, ty + tagH / 2); ctx.stroke();
+    ctx.save(); ctx.translate(tx, ty); ctx.rotate(0.14);
+    rr(ctx, 0, 0, tagW, tagH, 4); ctx.fillStyle = '#e9dfc2'; ctx.fill();
+    ctx.fillStyle = '#0b151b'; ctx.beginPath(); ctx.arc(7, tagH / 2, 2.2, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#3a2a12'; ctx.font = `400 ${Math.round(tagH * 0.46)}px Caprasimo, Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(S.mode === 'daily' ? `No. ${S.day}` : S.mode === 'party' ? S.code : 'Practice', tagW / 2 + 4, tagH / 2 + 1);
+    ctx.restore();
+  }
+
+  function flyPos(p, g, now) {
+    const t = Math.min(1, Math.max(0, (now - p.t0) / p.dur));
+    const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const ex = g.mouth.x + p.ox, ey = g.mouth.y;
+    const cx = (p.sx + ex) / 2 + p.bend, cy = Math.min(p.sy, ey) - 90 - Math.abs(p.sx - ex) * 0.15;
+    const u = 1 - e;
+    return { x: u * u * p.sx + 2 * u * e * cx + e * e * ex, y: u * u * p.sy + 2 * u * e * cy + e * e * ey, t };
+  }
+
+  function drawFly(ctx, x, y, R, ch, alpha) {
+    const L = GJ.LV[ch];
+    const spr = sprite(L.color);
+    const S2 = R * 4.2;
+    ctx.globalAlpha = alpha * 0.9;
+    ctx.drawImage(spr, x - S2 / 2, y - S2 / 2, S2, S2);
+    ctx.globalAlpha = Math.min(1, alpha + 0.15);
+    ctx.fillStyle = L.color;
+    ctx.beginPath(); ctx.arc(x, y, R * 0.66, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#2a1a06';
+    ctx.font = `400 ${Math.round(R * 0.98)}px Caprasimo, Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ch, x, y + R * 0.06);
+    ctx.globalAlpha = 1;
+  }
+
+  function spawnInJar(ch) {
+    jar.flies.push({ ch, mode: 'jar', u: 0.05 + Math.random() * 0.9, v: 0.05 + Math.random() * 0.9, vx: 0, vy: 0, ph: Math.random() * 6.28, sp: 0.7 + Math.random() * 0.8, settle: 0 });
+  }
+  function respawnJar() {
+    jar.flies = [];
+    stripOverride = null;
+    S.caught.forEach(spawnInJar);
+  }
+
+  function floatText(text, cls) {
+    const el = document.createElement('div');
+    el.className = 'float ' + (cls || '');
+    el.textContent = text;
+    floats.appendChild(el);
+    setTimeout(() => el.remove(), 1900);
+  }
+
+  function catchAnimation(r, from, label) {
+    const g = geom();
+    const now = performance.now();
+    const n = r.fresh.length;
+    const sx0 = from ? from.left + 24 : g.cx, sy0 = from ? from.top + from.height / 2 : g.bottom + 60;
+    const span = from ? Math.min(from.width - 48, n * 16) : 0;
+    let landAt = 0;
+    r.fresh.forEach((ch, k) => {
+      const delay = REDUCE ? 0 : k * 85;
+      const dur = REDUCE ? 1 : 820 + Math.random() * 180;
+      landAt = Math.max(landAt, delay + dur);
+      jar.flies.push({ ch, mode: 'fly', sx: sx0 + (n > 1 ? (span * k) / (n - 1) : 0), sy: sy0, t0: now + delay, dur, ox: (Math.random() - 0.5) * g.nw * 0.4, bend: (Math.random() - 0.5) * 80, ph: Math.random() * 6.28, sp: 0.7 + Math.random() * 0.8, tier: GJ.LV[ch].tier, pinged: false });
+    });
+    if (label) setTimeout(() => floatText(label), REDUCE ? 0 : Math.min(landAt, 700));
+    if (r.sealed) {
+      setTimeout(() => {
+        jar.flash = 1;
+        sealChord();
+        floatText('Jar sealed +100', 'seal');
+        const gg = geom();
+        for (const p of jar.flies) {
+          if (p.mode !== 'jar') continue;
+          const x = gg.inner.x0 + p.u * (gg.inner.x1 - gg.inner.x0), y = gg.inner.y0 + p.v * (gg.inner.y1 - gg.inner.y0);
+          Object.assign(p, { mode: 'out', x, y, vx: (Math.random() - 0.5) * 1.6, vy: -(1.2 + Math.random() * 2.4), life: 1 });
+        }
+        setTimeout(() => { stripOverride = null; paintStrip(); }, REDUCE ? 0 : 900);
+      }, landAt + 250);
+    }
+  }
+
+  function frame(now) {
+    const t = now;
+    sctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      const a = 0.25 + 0.25 * Math.sin(t * 0.0011 + s.ph);
+      sctx.fillStyle = `rgba(230,240,255,${a})`;
+      sctx.fillRect(s.x, s.y, s.s, s.s);
+    }
+    const amb = sprite('#ffc95e');
+    for (const p of ambient) {
+      if (!REDUCE) {
+        p.vx += (Math.random() - 0.5) * 0.05; p.vy += (Math.random() - 0.5) * 0.05;
+        p.vx *= 0.98; p.vy *= 0.98;
+        p.x += p.vx * p.sp; p.y += p.vy * p.sp;
+        if (p.x < -20) p.x = W + 20; if (p.x > W + 20) p.x = -20;
+        if (p.y < H * 0.25) p.vy += 0.02; if (p.y > H - 20) p.vy -= 0.03;
+      }
+      const blink = Math.pow(Math.max(0, Math.sin(t * 0.0012 * p.sp + p.ph)), 4);
+      sctx.globalAlpha = 0.08 + 0.6 * blink;
+      sctx.drawImage(amb, p.x - 9, p.y - 9, 18, 18);
+    }
+    sctx.globalAlpha = 1;
+    for (const b of grass) {
+      const sway = REDUCE ? 0 : Math.sin(t * 0.0009 + b.ph) * 4;
+      const tipX = b.x + b.lean + sway, tipY = H - b.h;
+      sctx.beginPath();
+      sctx.moveTo(b.x - b.w / 2, H);
+      sctx.quadraticCurveTo(b.x + (b.lean + sway) * 0.3, H - b.h * 0.5, tipX, tipY);
+      sctx.quadraticCurveTo(b.x + (b.lean + sway) * 0.3 + b.w * 0.4, H - b.h * 0.5, b.x + b.w / 2, H);
+      sctx.fillStyle = b.shade > 0.5 ? '#0b1e1f' : '#0e2626';
+      sctx.fill();
+    }
+
+    fctx.clearRect(0, 0, W, H);
+    const g = geom();
+    const visible = g.r.bottom > 0 && g.r.top < H;
+    if (visible) drawJarBack(fctx, g);
+    const R = g.R;
+    const iw = g.inner.x1 - g.inner.x0, ih = g.inner.y1 - g.inner.y0;
+    const jarFlies = jar.flies.filter(p => p.mode === 'jar');
+    for (const p of jar.flies) {
+      if (p.mode === 'fly') {
+        if (now < p.t0) continue;
+        const pos = flyPos(p, g, now);
+        if (pos.t >= 1) {
+          Object.assign(p, { mode: 'jar', u: 0.5 + p.ox / Math.max(1, iw), v: 0, vx: (Math.random() - 0.5) * 0.004, vy: 0.012, tu: 0.08 + Math.random() * 0.84, tv: 0.15 + Math.random() * 0.8, settle: 80 });
+          if (!p.pinged) { p.pinged = true; ping(p.tier); }
+        } else {
+          drawFly(fctx, pos.x, pos.y, R * (0.8 + 0.2 * pos.t), p.ch, 1);
+          continue;
+        }
+      }
+      if (p.mode === 'jar') {
+        if (!REDUCE) {
+          if (p.tu == null || Math.random() < 0.004) { p.tu = 0.05 + Math.random() * 0.9; p.tv = 0.05 + Math.random() * 0.9; }
+          const pull = p.settle > 0 ? 0.0016 : 0.00012;
+          if (p.settle > 0) p.settle -= 1;
+          p.vx += (p.tu - p.u) * pull + (Math.random() - 0.5) * 0.0006;
+          p.vy += (p.tv - p.v) * pull + (Math.random() - 0.5) * 0.0006;
+          for (const q of jarFlies) {
+            if (q === p) continue;
+            const dx = (p.u - q.u) * iw, dy = (p.v - q.v) * ih, d2 = dx * dx + dy * dy, min = R * 1.9;
+            if (d2 > 0.01 && d2 < min * min) { const d = Math.sqrt(d2); p.vx += (dx / d) * 0.0009; p.vy += (dy / d) * 0.0009; }
+          }
+          p.vx *= 0.965; p.vy *= 0.965;
+          const cap = p.settle > 0 ? 0.014 : 0.0045; const sp = Math.hypot(p.vx, p.vy); if (sp > cap) { p.vx *= cap / sp; p.vy *= cap / sp; }
+          p.u += p.vx; p.v += p.vy;
+          if (p.u < 0) { p.u = 0; p.vx = Math.abs(p.vx); } if (p.u > 1) { p.u = 1; p.vx = -Math.abs(p.vx); }
+          if (p.v < 0) { p.v = 0; p.vy = Math.abs(p.vy); } if (p.v > 1) { p.v = 1; p.vy = -Math.abs(p.vy); }
+        }
+        if (visible) {
+          const x = g.inner.x0 + p.u * iw, y = g.inner.y0 + p.v * ih;
+          const blink = REDUCE ? 1 : 0.62 + 0.38 * Math.sin(t * 0.0021 * p.sp + p.ph);
+          drawFly(fctx, x, y, R, p.ch, blink);
+        }
+      } else if (p.mode === 'out') {
+        p.x += p.vx; p.y += p.vy; p.vy -= 0.03; p.life -= REDUCE ? 1 : 0.011;
+        if (p.life > 0) drawFly(fctx, p.x, p.y, R * 0.9, p.ch, p.life);
+      }
+    }
+    jar.flies = jar.flies.filter(p => p.mode !== 'out' || p.life > 0);
+    if (visible) drawJarFront(fctx, g);
+    jar.flash = Math.max(0, jar.flash - 0.012);
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- boot ---------- */
+  function waitForClaude(ms) {
+    return new Promise(resolve => {
+      const t0 = Date.now();
+      (function poll() {
+        if (window.claude && typeof window.claude.use === 'function') return resolve(window.claude);
+        if (Date.now() - t0 > ms) return resolve(null);
+        setTimeout(poll, 100);
+      })();
+    });
+  }
+  async function initNet() {
+    const c = await waitForClaude(4000);
+    if (!c) return;
+    const safe = name => Promise.resolve().then(() => c.use(name)).catch(() => null);
+    const userP = safe('user');
+    const roomP = safe('room');
+    const dbP = safe('db');
+    const user = await userP;
+    if (user) {
+      NET.user = user;
+      try { NET.uid = await user.id(); } catch (e) { NET.uid = null; }
+    }
+    roomP.then(room => {
+      if (!room) return;
+      NET.room = room;
+      room.onConnection(cn => { NET.connected = cn; renderSocial(); }, () => {});
+      room.onPeers(ch => {
+        NET.lobbyPeers = ch.peers.filter(p => p.kind !== 'agent');
+        resolveNames(NET.lobbyPeers.map(idOf));
+        renderSocial();
+      }, () => { NET.room = null; NET.lobbyPeers = []; renderSocial(); });
+      NET.lastLobby = '';
+      if (['intro', 'end'].includes(S.phase)) render(); else { renderSocial(); updateLobby(); }
+    });
+    dbP.then(db => { if (db) initDb(db); });
+  }
+
+  function boot(data) {
+    if (data && data.S && data.S.cats && data.S.mode !== 'party') {
+      S = data.S;
+      if (S.phase === 'play') S.phase = 'intro';
+      if (S.phase === 'reveal' && !S.results[S.i]) S.phase = 'intro';
+    } else {
+      S = loadDaily();
+    }
+    buildStrip();
+    paintSound();
+    respawnJar();
+    render();
+    resize();
+    requestAnimationFrame(frame);
+    if (document.fonts && document.fonts.load) document.fonts.load('400 20px Caprasimo').catch(() => {});
+    initNet();
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('pagehide', () => { if (P) { try { P.room.leave(); } catch (e) { /* closing */ } } });
+  try { window.claude && window.claude.hot && window.claude.hot.snapshot(() => ({ S: S && S.mode !== 'party' ? S : null })); } catch (e) { /* not in viewer */ }
+  const hot = window.claude && window.claude.hot;
+  if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data ? hot.data : {});
+})();
+
+</script>
+</body>
+</html>
